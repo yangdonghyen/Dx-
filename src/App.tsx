@@ -61,11 +61,26 @@ const PREFS_E: Record<string, string> = { 바다: '🌊', 자연: '🌿', 도시
 const ALL_PREFS = Object.keys(PREFS_E)
 const TRANSPORTS = [{ id: '자동차', e: '🚗' }, { id: '대중교통', e: '🚌' }, { id: '택시', e: '🚕' }, { id: '도보 중심', e: '🚶' }]
 
+interface TravelNotification { id: string; e: string; title: string; body: string; unread: boolean; t: string }
+const INITIAL_NOTIFICATIONS: TravelNotification[] = [
+  { id: 'trip-reminder-20260924', e: '✈️', title: '여행 D-5', body: '강릉 여행이 5일 남았어요.', unread: true, t: '방금' },
+  { id: 'weather-20260924', e: '🌧', title: '날씨 알림', body: '여행 기간 중 비 소식이 있어요.', unread: true, t: '1시간 전' },
+  { id: 'taste-analysis', e: '🤖', title: 'AI 취향 분석 완료', body: '바다·맛집·휴식을 좋아하신다고 분석했어요.', unread: false, t: '3시간 전' },
+  { id: 'itinerary-update', e: '✏️', title: '일정 변경', body: '동행자가 일정을 수정했어요.', unread: false, t: '어제' },
+]
+const READ_NOTIFICATIONS_KEY = 'travel-mate:demo:read-notifications:v1'
+const unreadCount = (notifications: TravelNotification[]) => notifications.filter(item => item.unread).length
+function initialAppState(): AppState {
+  let readIds: unknown = []
+  try { readIds = JSON.parse(localStorage.getItem(READ_NOTIFICATIONS_KEY) ?? '[]') } catch { /* Keep default state if storage is unavailable. */ }
+  const read = new Set(Array.isArray(readIds) ? readIds.filter((id): id is string => typeof id === 'string') : [])
+  return { ...INIT, notifications: INITIAL_NOTIFICATIONS.map(item => ({ ...item, unread: item.unread && !read.has(item.id) })) }
+}
 // ─── App State ────────────────────────────────────────────────────────────────
 interface AppState {
   screen: Screen; screenHistory: Screen[]
   seniorMode: boolean; userName: string; userPrefs: string[]; travelStyle: string
-  currentTrip: Trip; notifs: number
+  currentTrip: Trip; notifications: TravelNotification[]
   selectedPlace: Place | null; savedPlaces: Place[]; aiPrefs: string[]
   draft: { selectedPlaces?: Place[]; startDate?: string; endDate?: string; travelers?: number; transport?: string[]; budget?: string; companions?: Companion[] }
 }
@@ -73,7 +88,7 @@ interface AppState {
 const INIT: AppState = {
   screen: 'login', screenHistory: [],
   seniorMode: true, userName: '민우', userPrefs: ['바다', '맛집', '카페'], travelStyle: '여유롭게',
-  currentTrip: UPCOMING, notifs: 2,
+  currentTrip: UPCOMING, notifications: INITIAL_NOTIFICATIONS,
   selectedPlace: null, savedPlaces: YOUTUBE_SAVED, aiPrefs: ['바다', '맛집', '휴식'],
   draft: {},
 }
@@ -273,7 +288,7 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
     <div className="h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F3F7FF 0%,#F9F5FF 46%,#F2FBF8 100%)' }}>
       <header className="flex items-center justify-between px-5 pt-12 pb-5">
         <div><p className="text-base font-bold text-[#4169D8]">여행메이트</p><h1 className="mt-1 text-2xl font-black text-gray-900">안녕하세요, {state.userName}님</h1><p className="mt-1 text-base text-gray-600">어디로 떠나볼까요?</p></div>
-        <button onClick={() => nav('notifications')} aria-label="알림 열기" className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm"><BellIc />{state.notifs > 0 && <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />}</button>
+        <button onClick={() => nav('notifications')} aria-label="알림 열기" className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm"><BellIc />{unreadCount(state.notifications) > 0 && <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />}</button>
       </header>
       <main className="px-5 pb-7">
         <section aria-label="여행지 검색" className="rounded-3xl bg-white p-4 shadow-sm">
@@ -299,7 +314,8 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
 }
 // ─── Home ─────────────────────────────────────────────────────────────────────
 function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
-  const { userName, currentTrip, savedPlaces, seniorMode: sm, notifs } = state
+  const { userName, currentTrip, savedPlaces, seniorMode: sm } = state
+  const notifs = unreadCount(state.notifications)
   const until = daysUntil(currentTrip.startDate)
   const ongoing = until <= 0
   const tl = sm ? 'text-xl' : 'text-lg'
@@ -1613,33 +1629,35 @@ function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: S
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
-function NotificationsScreen({ nav, setState }: { nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
-  useEffect(() => { setState(s => ({ ...s, notifs: 0 })) }, [])
-  const notifs = [
-    { e: '✈️', title: '여행 D-5', body: '강릉 여행이 5일 남았어요.', unread: true, t: '방금' },
-    { e: '🌧', title: '날씨 알림', body: '여행 기간 중 비 소식이 있어요.', unread: true, t: '1시간 전' },
-    { e: '🤖', title: 'AI 취향 분석 완료', body: '바다·맛집·휴식을 좋아하신다고 분석했어요.', unread: false, t: '3시간 전' },
-    { e: '✏️', title: '일정 변경', body: '동행자가 일정을 수정했어요.', unread: false, t: '어제' },
-  ]
+function NotificationsScreen({ notifications, nav, setState }: { notifications: TravelNotification[]; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
+  function markRead(id: string) {
+    setState(previous => {
+      if (!previous.notifications.some(item => item.id === id && item.unread)) return previous
+      return { ...previous, notifications: previous.notifications.map(item => item.id === id ? { ...item, unread: false } : item) }
+    })
+  }
   return (
     <div className="flex flex-col h-full" style={{ background: 'linear-gradient(160deg,#F0F4FF,#F7F8FF)' }}>
       <PageHeader title="알림" back={() => nav('home')} />
+      <p role="status" className="sr-only">읽지 않은 알림 {unreadCount(notifications)}개</p>
       <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-3 space-y-2">
-        {notifs.map((n, i) => (
-          <div key={i} className={`rounded-2xl p-4 flex gap-3 ${n.unread ? 'bg-[#EEF2FF] border border-[#4169D8]/20' : 'bg-white'}`} style={!n.unread ? { boxShadow: '0 1px 6px rgba(0,0,0,0.05)' } : {}}>
-            <span className="text-2xl flex-shrink-0">{n.e}</span>
-            <div className="flex-1">
-              <div className="flex justify-between mb-0.5"><p className="font-semibold text-gray-900 text-sm">{n.title}</p><p className="text-xs text-gray-400">{n.t}</p></div>
-              <p className="text-sm text-gray-500">{n.body}</p>
-            </div>
-            {n.unread && <div className="w-2 h-2 rounded-full bg-[#4169D8] flex-shrink-0 mt-1" />}
-          </div>
+        {notifications.map(n => (
+          <button type="button" key={n.id} onClick={() => markRead(n.id)}
+            aria-label={`${n.title}, ${n.body}, ${n.unread ? '읽지 않음, 눌러서 확인' : '읽음'}`}
+            className={`w-full text-left rounded-2xl p-4 flex gap-3 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#4169D8] ${n.unread ? 'bg-[#EEF2FF] border border-[#4169D8]/20' : 'bg-white border border-transparent'}`}
+            style={!n.unread ? { boxShadow: '0 1px 6px rgba(0,0,0,0.05)' } : {}}>
+            <span aria-hidden="true" className="text-2xl flex-shrink-0">{n.e}</span>
+            <span className="flex-1">
+              <span className="flex justify-between mb-0.5"><span className="font-semibold text-gray-900 text-sm">{n.title}</span><span className="text-xs text-gray-400">{n.t}</span></span>
+              <span className="block text-sm text-gray-500">{n.body}</span>
+            </span>
+            {n.unread && <span aria-hidden="true" className="w-2 h-2 rounded-full bg-[#4169D8] flex-shrink-0 mt-1" />}
+          </button>
         ))}
       </div>
     </div>
   )
 }
-
 // ─── Profile ──────────────────────────────────────────────────────────────────
 function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [editPrefs, setEditPrefs] = useState(false); const [prefs, setPrefs] = useState(state.userPrefs); const sm = state.seniorMode
@@ -1708,7 +1726,12 @@ const NAV_SCREENS: Screen[] = ['home', 'map', 'youtube-saved', 'profile', 'past-
 const NO_NAV: Screen[] = ['login', 'register', 'setup', 'analyzing', 'ai-loading', 'camera']
 
 export default function App() {
-  const [state, setState] = useState<AppState>(INIT)
+  const [state, setState] = useState<AppState>(initialAppState)
+  useEffect(() => {
+    try {
+      localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(state.notifications.filter(item => !item.unread).map(item => item.id)))
+    } catch { /* Reading notifications still works for this session when storage is blocked. */ }
+  }, [state.notifications])
   const startVoiceRef = useRef<(() => void) | null>(null)
   const nav = (screen: Screen) => {
     const navigate = () => setState(s => ({ ...s, screen, screenHistory: [...s.screenHistory, s.screen] }))
@@ -1754,7 +1777,7 @@ export default function App() {
       case 'today-travel': return <TodayTravelScreen state={state} nav={nav} />
       case 'directions': return <DirectionsScreen nav={nav} />
       case 'past-trips': return <PastTripsScreen state={state} nav={nav} setState={setState} />
-      case 'notifications': return <NotificationsScreen nav={nav} setState={setState} />
+      case 'notifications': return <NotificationsScreen notifications={state.notifications} nav={nav} setState={setState} />
       case 'profile': return <ProfileScreen state={state} nav={nav} setState={setState} />
       default: return <HomeScreen state={state} nav={nav} />
     }
@@ -1769,7 +1792,7 @@ export default function App() {
           <div className="flex items-center gap-1.5"><span>●●●●</span><span>WiFi</span><span>🔋</span></div>
         </div>
         <div className="flex-1 overflow-hidden flex flex-col">{screenEl}</div>
-        {showNav && <BottomNav active={state.screen} nav={nav} sm={sm} notifs={state.notifs} />}
+        {showNav && <BottomNav active={state.screen} nav={nav} sm={sm} notifs={unreadCount(state.notifications)} />}
       </div>
     </div>
   )
