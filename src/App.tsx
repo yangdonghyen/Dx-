@@ -99,7 +99,7 @@ interface AppState {
 }
 
 const INIT: AppState = {
-  screen: 'home', screenHistory: [],
+  screen: 'login', screenHistory: [],
   seniorMode: true, userName: '민우', userPrefs: ['바다', '맛집', '카페'], travelStyle: '여유롭게',
   currentTrip: UPCOMING, notifs: 2,
   selectedPlace: null, savedPlaces: YOUTUBE_SAVED, aiPrefs: ['바다', '맛집', '휴식'],
@@ -176,38 +176,43 @@ function PrimaryBtn({ label, onClick, disabled, sm, gradient }: { label: string;
 
 // ─── Login / Register ─────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
-  const [email, setEmail] = useState(''); const [pw, setPw] = useState('')
+  const [id, setId] = useState('')
+  const [pw, setPw] = useState('')
+  const [help, setHelp] = useState<'id' | 'password' | null>(null)
+  const [notice, setNotice] = useState('')
+
+  const handleLogin = (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!id.trim() || !pw) {
+      setNotice('아이디와 비밀번호를 모두 입력해 주세요.')
+      return
+    }
+    onLogin()
+  }
+
+  const requestAccountHelp = () => {
+    if (!id.trim()) {
+      setNotice('가입할 때 사용한 이메일 또는 아이디를 입력해 주세요.')
+      return
+    }
+    setNotice(help === 'id' ? '등록된 이메일이 있으면 아이디 안내를 보냈어요.' : '등록된 이메일이 있으면 비밀번호 재설정 안내를 보냈어요.')
+  }
+
   return (
-    <div className="h-full bg-white flex flex-col px-6 pt-20 pb-10 overflow-y-auto scrollbar-hide">
-      <div className="text-center mb-10">
-        <div className="inline-flex w-20 h-20 rounded-2xl bg-[#4169D8] items-center justify-center mb-4 shadow-lg"><span className="text-4xl">✈️</span></div>
-        <h1 className="text-2xl font-black text-gray-900">여행메이트</h1>
-        <p className="text-gray-400 mt-1 text-sm">나에게 맞는 여행을 시작해볼까요?</p>
-      </div>
-      <div className="space-y-3 mb-3">
-        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="이메일 또는 아이디"
-          className="w-full h-14 px-4 rounded-2xl border border-gray-200 text-base outline-none focus:border-[#4169D8]" />
-        <input value={pw} onChange={e => setPw(e.target.value)} type="password" placeholder="비밀번호"
-          className="w-full h-14 px-4 rounded-2xl border border-gray-200 text-base outline-none focus:border-[#4169D8]" />
-      </div>
-      <div className="flex justify-center gap-5 mb-5">
-        <button className="text-sm text-gray-400">비밀번호 찾기</button>
-        <button onClick={onRegister} className="text-sm text-[#4169D8] font-semibold">회원가입</button>
-      </div>
-      <button onClick={onLogin} className="w-full h-14 rounded-2xl bg-[#4169D8] text-white font-bold text-lg mb-5">로그인</button>
-      <div className="flex items-center gap-3 mb-5"><div className="flex-1 h-px bg-gray-200"/><span className="text-sm text-gray-400">또는</span><div className="flex-1 h-px bg-gray-200"/></div>
-      <div className="space-y-3">
-        <button onClick={onLogin} className="w-full h-14 rounded-2xl bg-[#FEE500] font-bold text-[#3C1E1E] flex items-center justify-center gap-2 active:scale-95">
-          <span className="text-xl">💛</span> 카카오로 시작하기
-        </button>
-        <button onClick={onLogin} className="w-full h-14 rounded-2xl bg-[#03C75A] font-bold text-white flex items-center justify-center gap-2 active:scale-95">
-          <span className="text-xl">🟢</span> 네이버로 시작하기
-        </button>
-      </div>
+    <div className="h-full bg-white flex flex-col px-6 pt-16 pb-8 overflow-y-auto scrollbar-hide">
+      <div className="text-center mb-8"><div className="inline-flex w-20 h-20 rounded-3xl bg-[#4169D8] items-center justify-center mb-4 shadow-lg"><span className="text-4xl">✈️</span></div><h1 className="text-3xl font-black text-gray-900">여행메이트</h1><p className="text-gray-500 mt-2 text-base">나에게 맞는 여행을 시작해볼까요?</p></div>
+      <form onSubmit={handleLogin} noValidate>
+        <div className="space-y-3"><label className="sr-only" htmlFor="login-id">아이디 또는 이메일</label><input id="login-id" value={id} onChange={e => { setId(e.target.value); setNotice('') }} autoComplete="username" placeholder="아이디 또는 이메일" className="w-full h-14 px-4 rounded-2xl border border-gray-200 text-base outline-none focus:border-[#4169D8] focus:ring-2 focus:ring-[#4169D8]/20" /><label className="sr-only" htmlFor="login-password">비밀번호</label><input id="login-password" value={pw} onChange={e => { setPw(e.target.value); setNotice('') }} type="password" autoComplete="current-password" placeholder="비밀번호" className="w-full h-14 px-4 rounded-2xl border border-gray-200 text-base outline-none focus:border-[#4169D8] focus:ring-2 focus:ring-[#4169D8]/20" /></div>
+        {notice && <p className="mt-3 rounded-xl bg-[#EEF2FF] px-3 py-2 text-sm leading-5 text-[#2749A5]" role="status">{notice}</p>}
+        <div className="flex justify-center gap-5 my-5"><button type="button" onClick={() => { setHelp(help === 'id' ? null : 'id'); setNotice('') }} className="text-sm text-gray-600 underline underline-offset-4">아이디 찾기</button><button type="button" onClick={() => { setHelp(help === 'password' ? null : 'password'); setNotice('') }} className="text-sm text-gray-600 underline underline-offset-4">비밀번호 찾기</button><button type="button" onClick={onRegister} className="text-sm text-[#4169D8] font-bold">회원가입</button></div>
+        {help && <div className="mb-5 rounded-2xl border border-[#DCE5FF] bg-[#F7F9FF] p-4"><h2 className="text-base font-bold text-gray-900">{help === 'id' ? '아이디 찾기' : '비밀번호 찾기'}</h2><p className="mt-1 text-sm leading-5 text-gray-600">가입할 때 사용한 이메일 또는 아이디를 입력한 뒤 안내를 받아보세요.</p><button type="button" onClick={requestAccountHelp} className="mt-3 min-h-11 rounded-xl bg-white px-4 text-sm font-bold text-[#4169D8] shadow-sm">안내 받기</button></div>}
+        <button type="submit" className="w-full h-14 rounded-2xl bg-[#4169D8] text-white font-bold text-lg active:scale-[0.98]">로그인하기</button>
+      </form>
+      <div className="flex items-center gap-3 my-5"><div className="flex-1 h-px bg-gray-200"/><span className="text-sm text-gray-400">또는</span><div className="flex-1 h-px bg-gray-200"/></div>
+      <div className="space-y-3"><button onClick={onLogin} className="w-full h-14 rounded-2xl bg-[#FEE500] font-bold text-[#3C1E1E] flex items-center justify-center gap-2 active:scale-[0.98]"><span className="text-xl">💛</span> 카카오로 로그인하기</button><button onClick={onLogin} className="w-full h-14 rounded-2xl bg-[#03C75A] font-bold text-white flex items-center justify-center gap-2 active:scale-[0.98]"><span className="text-xl">🟢</span> 네이버로 로그인하기</button></div>
     </div>
   )
 }
-
 function RegisterScreen({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: '', email: '', pw: '', pw2: '' })
   return (
