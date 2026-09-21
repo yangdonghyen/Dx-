@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import jeonjuHanokImage from './assets/jeonju-hanok.jpg'
+import { buildDays, type DayPlan } from './lib/itinerary'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen =
@@ -15,9 +17,7 @@ type Screen =
   | 'past-trips' | 'notifications' | 'profile'
 
 interface Place { id: string; name: string; region: string; tags: string[]; img: string }
-interface ScheduleItem { time: string; place: string; icon: string; tags: string[]; walk: string; cost: string; rest: boolean; transport?: string }
-interface DayPlan { dayNumber: number; date: string; places: ScheduleItem[] }
-interface Companion { name: string; age: string; prefs: string[]; walking: string; avoid: string[] }
+interface Companion { name: string; age: string; prefs: string[]; walking: string; avoid: string[]; permission?: 'edit' | 'view' }
 interface Trip {
   id: string; title: string; startDate: string; endDate: string
   travelers: number; transport: string[]; budget: string
@@ -25,59 +25,30 @@ interface Trip {
   selectedPlaces: Place[]
 }
 
+function placeImageUrl(image: string, width: number, height: number) {
+  return image === jeonjuHanokImage ? image : `https://images.unsplash.com/${image}?w=${width}&h=${height}&fit=crop`
+}
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const YOUTUBE_SAVED: Place[] = [
   { id: 'p1', name: '안목해변', region: '강원 강릉시', tags: ['바다', '카페', '산책'], img: 'photo-1507525428034-b723cf961d3e' },
   { id: 'p2', name: '황리단길', region: '경북 경주시', tags: ['맛집', '전통', '카페'], img: 'photo-1569383746724-6f1b882b8f46' },
   { id: 'p3', name: '애월 해안도로', region: '제주 제주시', tags: ['바다', '드라이브', '휴식'], img: 'photo-1537996194471-e657df975ab4' },
   { id: 'p4', name: '광안리해수욕장', region: '부산 수영구', tags: ['바다', '야경', '맛집'], img: 'photo-1517404215738-15263e9f9178' },
-  { id: 'p5', name: '전주 한옥마을', region: '전북 전주시', tags: ['전통문화', '맛집', '체험'], img: 'photo-1583952870261-0d01264c5265' },
+  { id: 'p5', name: '전주 한옥마을', region: '전북 전주시', tags: ['전통문화', '맛집', '체험'], img: jeonjuHanokImage },
   { id: 'p6', name: '남이섬', region: '강원 춘천시', tags: ['자연', '산책', '체험'], img: 'photo-1464822759023-fed622ff2c3b' },
 ]
 
-const SCHED_TEMPLATES: ScheduleItem[][] = [
-  [
-    { time: '10:30', place: '출발지 도착', icon: '🚆', tags: ['도착'], walk: '', cost: '', rest: false, transport: '기차' },
-    { time: '11:30', place: '안목해변', icon: '🌊', tags: ['바다', '산책'], walk: '약 10분', cost: '무료', rest: true },
-    { time: '13:00', place: '중앙시장 점심', icon: '🍲', tags: ['점심', '맛집'], walk: '약 5분', cost: '12,000원', rest: false },
-    { time: '14:30', place: '카페거리', icon: '☕', tags: ['카페', '휴식'], walk: '약 3분', cost: '8,000원', rest: true },
-    { time: '17:00', place: '숙소 체크인', icon: '🏨', tags: ['숙소'], walk: '', cost: '', rest: true },
-  ],
-  [
-    { time: '09:00', place: '조식', icon: '🍳', tags: ['식사'], walk: '', cost: '', rest: true },
-    { time: '10:30', place: '경포해변', icon: '🌊', tags: ['바다', '산책'], walk: '약 15분', cost: '무료', rest: false },
-    { time: '13:00', place: '주문진 수산시장', icon: '🦞', tags: ['점심', '시장'], walk: '약 5분', cost: '20,000원', rest: false },
-    { time: '15:30', place: '정동진', icon: '⛱', tags: ['관광', '사진'], walk: '약 10분', cost: '무료', rest: true },
-    { time: '18:30', place: '저녁 식사', icon: '🍽', tags: ['저녁'], walk: '', cost: '15,000원', rest: false },
-  ],
-  [
-    { time: '09:00', place: '조식', icon: '🍳', tags: ['식사'], walk: '', cost: '', rest: true },
-    { time: '10:30', place: '오죽헌', icon: '🏯', tags: ['역사', '문화'], walk: '약 10분', cost: '3,000원', rest: false },
-    { time: '12:30', place: '순두부 점심', icon: '🥣', tags: ['점심', '맛집'], walk: '약 5분', cost: '10,000원', rest: false },
-    { time: '15:00', place: '귀가', icon: '🚆', tags: ['귀가'], walk: '', cost: '', rest: false },
-  ],
-]
-
-function buildDays(startDate: string, endDate: string): DayPlan[] {
-  const start = new Date(startDate), end = new Date(endDate)
-  const count = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1
-  return Array.from({ length: count }, (_, i) => {
-    const d = new Date(start); d.setDate(d.getDate() + i)
-    return { dayNumber: i + 1, date: d.toISOString().slice(0, 10), places: SCHED_TEMPLATES[i % 3] }
-  })
-}
-
 const PAST_TRIPS: Trip[] = [
-  { id: 't1', title: '강릉 여행', startDate: '2026-08-20', endDate: '2026-08-22', travelers: 2, transport: ['기차'], budget: '30~50만원', companions: [], hotel: '씨마크 호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[0]], days: buildDays('2026-08-20', '2026-08-22') },
-  { id: 't2', title: '부산 여행', startDate: '2026-07-10', endDate: '2026-07-12', travelers: 3, transport: ['자동차'], budget: '50만원 이상', companions: [], hotel: '파라다이스 호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[3]], days: buildDays('2026-07-10', '2026-07-12') },
-  { id: 't3', title: '제주 여행', startDate: '2026-06-02', endDate: '2026-06-05', travelers: 2, transport: ['비행기'], budget: '50만원 이상', companions: [], hotel: '제주 신라호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[2]], days: buildDays('2026-06-02', '2026-06-05') },
+  { id: 't1', title: '강릉 여행', startDate: '2026-08-20', endDate: '2026-08-22', travelers: 2, transport: ['기차'], budget: '30~50만원', companions: [], hotel: '씨마크 호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[0]], days: buildDays('2026-08-20', '2026-08-22', [YOUTUBE_SAVED[0]], ['기차']) },
+  { id: 't2', title: '부산 여행', startDate: '2026-07-10', endDate: '2026-07-12', travelers: 3, transport: ['자동차'], budget: '50만원 이상', companions: [], hotel: '파라다이스 호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[3]], days: buildDays('2026-07-10', '2026-07-12', [YOUTUBE_SAVED[3]], ['자동차']) },
+  { id: 't3', title: '제주 여행', startDate: '2026-06-02', endDate: '2026-06-05', travelers: 2, transport: ['비행기'], budget: '50만원 이상', companions: [], hotel: '제주 신라호텔', status: 'past', selectedPlaces: [YOUTUBE_SAVED[2]], days: buildDays('2026-06-02', '2026-06-05', [YOUTUBE_SAVED[2]], ['비행기']) },
 ]
 
 const UPCOMING: Trip = {
   id: 'cur', title: '강릉 여행', startDate: '2026-09-24', endDate: '2026-09-26',
   travelers: 2, transport: ['기차', '택시'], budget: '30~50만원',
   companions: [{ name: '아빠', age: '60대', prefs: ['자연', '맛집'], walking: '30분 정도', avoid: ['등산'] }],
-  hotel: '', status: 'upcoming', selectedPlaces: [YOUTUBE_SAVED[0]], days: buildDays('2026-09-24', '2026-09-26'),
+  hotel: '', status: 'upcoming', selectedPlaces: [YOUTUBE_SAVED[0]], days: buildDays('2026-09-24', '2026-09-26', [YOUTUBE_SAVED[0]], ['기차', '택시']),
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -427,7 +398,7 @@ function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void 
             {savedPlaces.slice(0, 4).map(p => (
               <button key={p.id} onClick={() => nav('place-detail')} className="flex-shrink-0 w-24 active:scale-95 transition-transform">
                 <div className="w-24 h-20 rounded-xl overflow-hidden bg-gray-100 mb-1.5">
-                  <img src={`https://images.unsplash.com/${p.img}?w=200&h=160&fit=crop`} alt={p.name} className="w-full h-full object-cover" />
+                  <img src={placeImageUrl(p.img, 200, 160)} alt={p.name} className="w-full h-full object-cover" />
                 </div>
                 <p className="text-xs font-semibold text-gray-900 truncate">{p.name}</p>
                 <p className="text-xs text-gray-400 truncate">{p.region.split(' ')[0]}</p>
@@ -449,7 +420,7 @@ function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void 
             {PAST_TRIPS.slice(0, 2).map(t => (
               <button key={t.id} onClick={() => nav('past-trips')}
                 className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 active:scale-95 transition-all text-left">
-                <img src={`https://images.unsplash.com/${t.selectedPlaces[0].img}?w=100&h=100&fit=crop`} alt={t.title} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                <img src={placeImageUrl(t.selectedPlaces[0].img, 100, 100)} alt={t.title} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
                 <div className="flex-1">
                   <p className={`font-semibold text-gray-900 ${sm ? 'text-base' : 'text-sm'}`}>{t.title}</p>
                   <p className="text-xs text-gray-400">{t.startDate.slice(0, 7).replace('-', '.')} · {t.travelers}명</p>
@@ -636,7 +607,7 @@ function PlaceResultScreen({ nav, setState }: { nav: (s: Screen) => void; setSta
         {places.map(p => (
           <button key={p.id} onClick={() => { setState(s => ({ ...s, selectedPlace: p })); nav('place-detail') }}
             className="w-full bg-white rounded-2xl flex overflow-hidden active:scale-95 transition-transform text-left" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
-            <img src={`https://images.unsplash.com/${p.img}?w=200&h=200&fit=crop`} alt={p.name} className="w-24 h-24 object-cover flex-shrink-0" />
+            <img src={placeImageUrl(p.img, 200, 200)} alt={p.name} className="w-24 h-24 object-cover flex-shrink-0" />
             <div className="p-3 flex flex-col justify-between flex-1">
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
@@ -683,7 +654,7 @@ function YouTubeSavedScreen({ state, nav, setState }: { state: AppState; nav: (s
             <button key={p.id} onClick={() => { setState(s => ({ ...s, selectedPlace: p })); nav('place-detail') }}
               className="bg-white rounded-2xl overflow-hidden active:scale-95 transition-transform text-left" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <div className="relative">
-                <img src={`https://images.unsplash.com/${p.img}?w=300&h=200&fit=crop`} alt={p.name} className="w-full h-28 object-cover" />
+                <img src={placeImageUrl(p.img, 300, 200)} alt={p.name} className="w-full h-28 object-cover" />
                 <div className="absolute top-2 left-2 bg-white/90 rounded-full p-1"><YtIc /></div>
               </div>
               <div className="p-3">
@@ -770,7 +741,8 @@ function PlaceDetailScreen({ state, nav }: { state: AppState; nav: (s: Screen) =
   return (
     <div className="h-full flex flex-col bg-white">
       <div className="relative h-60">
-        <img src={`https://images.unsplash.com/${p.img}?w=600&h=400&fit=crop`} alt={p.name} className="w-full h-full object-cover" />
+        <img src={placeImageUrl(p.img, 600, 400)} alt={p.name} className="w-full h-full object-cover" />
+        {p.img === jeonjuHanokImage && <a href="https://commons.wikimedia.org/wiki/File:Jeonju_Hanok_Village_20220701_001.jpg" target="_blank" rel="noreferrer" className="absolute bottom-2 left-2 rounded bg-black/75 px-2 py-1 text-xs text-white underline">사진: Mobius6 · CC BY-SA 4.0</a>}
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 50%)' }} />
         <button onClick={() => nav('youtube-saved')} className="absolute top-12 left-4 w-10 h-10 rounded-full bg-white/80 flex items-center justify-center"><LeftIc /></button>
         <button onClick={() => setSaved(s => !s)} className={`absolute top-12 right-4 w-10 h-10 rounded-full flex items-center justify-center ${saved ? 'bg-red-500 text-white' : 'bg-white/80 text-gray-700'}`}>
@@ -940,7 +912,7 @@ function TripPlacesScreen({ state, nav, setState }: { state: AppState; nav: (s: 
             <button key={p.id} onClick={() => toggle(p)}
               className={`w-full flex gap-3 rounded-2xl p-3 border-2 transition-all active:scale-95 text-left ${on ? 'border-[#4169D8] bg-[#EEF2FF]' : 'border-gray-100 bg-white'}`}
               style={!on ? { boxShadow: '0 1px 6px rgba(0,0,0,0.05)' } : {}}>
-              <img src={`https://images.unsplash.com/${p.img}?w=100&h=100&fit=crop`} alt={p.name} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+              <img src={placeImageUrl(p.img, 100, 100)} alt={p.name} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
               <div className="flex-1">
                 <div className="flex items-start justify-between">
                   <div>
@@ -1200,14 +1172,27 @@ function TripCompanionsScreen({ state, nav, setState }: { state: AppState; nav: 
                     ))}
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-500 mb-1.5">편집 권한</p>
+                <fieldset>
+                  <legend className="text-sm font-bold text-gray-600 mb-2">편집 권한</legend>
                   <div className="flex gap-2">
-                    {['편집 가능', '보기만'].map(opt => (
-                      <button key={opt} className="flex-1 py-2 rounded-xl bg-white border-2 border-gray-200 text-xs font-medium text-gray-600">{opt}</button>
+                    {([{ value: 'edit', label: '편집 가능' }, { value: 'view', label: '보기만' }] as const).map(opt => (
+                      <label key={opt.value} className="flex-1 cursor-pointer">
+                        <input type="radio" name={`companion-permission-${i}`} value={opt.value}
+                          checked={(c.permission ?? 'view') === opt.value}
+                          onChange={() => {
+                            const next = companions.map((companion, index) => index === i ? { ...companion, permission: opt.value } : companion)
+                            setCompanions(next)
+                            setState(previous => ({ ...previous, draft: { ...previous.draft, companions: next } }))
+                          }}
+                          className="peer sr-only" />
+                        <span className="flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 peer-checked:border-[#4169D8] peer-checked:bg-[#EEF2FF] peer-checked:text-[#2F4FBF] peer-focus-visible:outline-4 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#4169D8]">
+                          {(c.permission ?? 'view') === opt.value && <span aria-hidden="true">✓</span>}
+                          {opt.label}
+                        </span>
+                      </label>
                     ))}
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
           </div>
@@ -1260,7 +1245,7 @@ function TripConfirmScreen({ state, nav, setState }: { state: AppState; nav: (s:
       <div className="px-5 pb-6">
         <button onClick={() => {
           const sd = d.startDate || '2026-09-24', ed = d.endDate || '2026-09-26'
-          const newTrip: Trip = { id: 'new', title: `${places[0]?.region?.split(' ')[0] || '강릉'} 여행`, startDate: sd, endDate: ed, travelers: d.travelers || 2, transport: d.transport || ['자동차'], budget: d.budget || '보통', companions: d.companions || [], hotel: '', status: 'upcoming', selectedPlaces: places, days: buildDays(sd, ed) }
+          const newTrip: Trip = { id: 'new', title: `${places[0]?.region?.split(' ')[0] || '강릉'} 여행`, startDate: sd, endDate: ed, travelers: d.travelers || 2, transport: d.transport || ['자동차'], budget: d.budget || '보통', companions: d.companions || [], hotel: '', status: 'upcoming', selectedPlaces: places, days: buildDays(sd, ed, places, d.transport || ['자동차']) }
           setState(s => ({ ...s, currentTrip: newTrip, draft: {} })); nav('ai-loading')
         }} className={`w-full rounded-2xl text-white font-bold active:scale-95 ${sm ? 'h-16 text-lg' : 'h-14'}`}
           style={{ background: 'linear-gradient(135deg,#4169D8,#6B52D3)' }}>
@@ -1336,6 +1321,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
       </div>
       {/* Schedule */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-4 pb-36 space-y-1">
+        {days[dayIdx]?.notice && <p role="status" className="mb-4 rounded-2xl bg-amber-50 p-4 text-base leading-7 text-amber-900">{days[dayIdx].notice}</p>}
         {(days[dayIdx]?.places || []).map((item, i, arr) => (
           <div key={i} className="relative">
             {i < arr.length - 1 && <div className="absolute left-7 top-14 bottom-0 w-0.5 bg-gray-200 z-0" />}
@@ -1601,7 +1587,7 @@ function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: S
         {PAST_TRIPS.map(t => (
           <div key={t.id} className="bg-white rounded-3xl overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
             <div className="relative h-40">
-              <img src={`https://images.unsplash.com/${t.selectedPlaces[0].img}?w=600&h=250&fit=crop`} alt={t.title} className="w-full h-full object-cover" />
+              <img src={placeImageUrl(t.selectedPlaces[0].img, 600, 250)} alt={t.title} className="w-full h-full object-cover" />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top,rgba(0,0,0,0.6),transparent 60%)' }} />
               <div className="absolute bottom-3 left-4">
                 <h2 className={`text-white font-bold ${sm ? 'text-xl' : 'text-lg'}`}>{t.title}</h2>
