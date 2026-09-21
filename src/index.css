@@ -1,0 +1,62 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans KR", system-ui, sans-serif;
+  --color-primary: #4169d8;
+  --color-primary-light: #eef2ff;
+  --color-primary-dark: #2f4fbf;
+  --color-surface: #ffffff;
+  --color-bg: #f7f8ff;
+  --color-muted: #8b92a5;
+  --color-border: #e8eaf2;
+  --color-danger: #ff4b4b;
+  --color-success: #2dbe88;
+  --color-warning: #ffb020;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  background: #f7f8ff;
+  margin: 0;
+  padding: 0;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.gradient-bg {
+  background: linear-gradient(
+    160deg,
+    #f0f4ff 0%,
+    #f7f0ff 30%,
+    #f0faff 60%,
+    #f7f8ff 100%
+  );
+}
+
+.card-shadow {
+  box-shadow:
+    0 2px 12px rgba(65, 105, 216, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.senior-mode {
+  font-size: 110%;
+}
