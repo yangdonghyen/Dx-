@@ -13,7 +13,7 @@ type Screen =
   | 'place-detail' | 'map' | 'comfort-travel'
   | 'trip-places' | 'trip-date' | 'trip-people' | 'trip-transport'
   | 'trip-budget' | 'trip-companions' | 'trip-confirm' | 'ai-loading' | 'itinerary'
-  | 'accommodation' | 'pre-departure' | 'today-travel' | 'directions'
+  | 'accommodation' | 'pre-departure' | 'today-travel' | 'weather' | 'directions'
   | 'past-trips' | 'notifications' | 'profile'
 
 interface Place { id: string; name: string; region: string; tags: string[]; img: string }
@@ -251,19 +251,42 @@ function SetupScreen({ onDone }: { onDone: (style: string, prefs: string[], seni
   )
 }
 
+function WeatherScreen({ nav }: { nav: (s: Screen) => void }) {
+  const [plan, setPlan] = useState<'A' | 'B' | 'C'>('A')
+  const plans = {
+    A: { title: 'Plan A · 맑은 날 일정', detail: '안목해변 산책 → 커피거리 → 중앙시장', icon: '☀️' },
+    B: { title: 'Plan B · 비 오는 날 일정', detail: '오죽헌 → 강릉시립미술관 → 실내 카페', icon: '🌧️' },
+    C: { title: 'Plan C · 더운 날 일정', detail: '이른 해변 산책 → 박물관 → 휴식 카페', icon: '🌤️' },
+  } as const
+  const active = plans[plan]
+  return (
+    <div className="flex h-full flex-col bg-[#F3F7FF]">
+      <PageHeader title="오늘 날씨" back={() => nav('home')} />
+      <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-7">
+        <section className="rounded-3xl bg-[#173B76] p-5 text-white shadow-lg">
+          <p className="text-sm font-bold text-blue-200">강릉 · 오늘</p>
+          <div className="mt-2 flex items-end justify-between"><div className="flex items-end gap-3"><span className="text-5xl">☀️</span><strong className="text-4xl">23°</strong><span className="pb-1 text-base text-blue-100">맑음</span></div><span className="rounded-xl bg-white/15 px-3 py-2 text-sm font-bold">외출하기 좋아요</span></div>
+          <div className="mt-5 grid grid-cols-3 gap-2 text-center text-sm"><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">강수확률</p><b className="mt-1 block text-lg">10%</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">습도</p><b className="mt-1 block text-lg">52%</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">바람</p><b className="mt-1 block text-lg">2.1m/s</b></div></div>
+        </section>
+        <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-xl font-black text-gray-900">날씨별 오늘 일정</h2><p className="mt-1 text-sm text-gray-500">날씨에 맞는 Plan을 골라 일정을 확인하세요.</p><div className="mt-4 grid grid-cols-3 gap-2">{(['A', 'B', 'C'] as const).map(item => <button key={item} onClick={() => setPlan(item)} className={`min-h-12 rounded-xl text-sm font-black ${plan === item ? 'bg-[#4169D8] text-white' : 'bg-[#F1F4FF] text-[#4169D8]'}`}>Plan {item}</button>)}</div><div className="mt-4 rounded-2xl bg-[#F7F8FF] p-4"><div className="flex items-center gap-2"><span className="text-2xl">{active.icon}</span><h3 className="font-bold text-gray-900">{active.title}</h3></div><p className="mt-2 text-sm leading-6 text-gray-600">{active.detail}</p><button onClick={() => nav('today-travel')} className="mt-4 min-h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">이 일정으로 여행 보기</button></div></section>
+        <section className="mt-5 rounded-3xl bg-amber-50 p-5"><h2 className="font-black text-amber-950">🎉 행사 · 축제 반영</h2><p className="mt-2 text-sm leading-6 text-amber-900">강릉 커피거리 주말 행사 시간대를 고려해 방문 순서를 추천했어요.</p></section>
+      </div>
+    </div>
+  )
+}
 function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [page, setPage] = useState(0)
   const pages = [
     [
-      { label: '편안한 여행', description: '다음 일정과 길찾기', icon: '🌿', to: 'comfort-travel' as Screen, tone: 'bg-[#4169D8]' },
+      { label: '전체 일정', description: '여행 계획 다시 보기', icon: '📝', to: 'itinerary' as Screen, tone: 'bg-[#4169D8]' },
+      { label: '오늘의 일정', description: '지금 할 일 확인', icon: '📅', to: 'today-travel' as Screen, tone: 'bg-[#E16A3D]' },
       { label: '여행 만들기', description: '새 여행 계획 시작', icon: '🧳', to: 'trip-places' as Screen, tone: 'bg-[#6B52D3]' },
-      { label: '지도 탐색', description: '내 주변 장소 찾기', icon: '🗺️', to: 'map' as Screen, tone: 'bg-[#0F766E]' },
-      { label: '저장한 장소', description: `${state.savedPlaces.length}곳 다시 보기`, icon: '❤️', to: 'youtube-saved' as Screen, tone: 'bg-[#D14D72]' },
+      { label: '오늘 날씨', description: '날씨와 일정 확인', icon: '☀️', to: 'weather' as Screen, tone: 'bg-[#F59E0B]' },
     ],
     [
-      { label: '오늘의 일정', description: '지금 할 일 확인', icon: '📅', to: 'today-travel' as Screen, tone: 'bg-[#E16A3D]' },
-      { label: '전체 일정', description: '여행 계획 다시 보기', icon: '📝', to: 'itinerary' as Screen, tone: 'bg-[#4169D8]' },
       { label: '지난 여행', description: '추억과 기록 보기', icon: '📷', to: 'past-trips' as Screen, tone: 'bg-[#8B5E3C]' },
+      { label: '저장한 장소', description: `${state.savedPlaces.length}곳 다시 보기`, icon: '❤️', to: 'youtube-saved' as Screen, tone: 'bg-[#D14D72]' },
+      { label: '지도 탐색', description: '내 주변 장소 찾기', icon: '🗺️', to: 'map' as Screen, tone: 'bg-[#0F766E]' },
       { label: '내 설정', description: '글자와 화면 조절', icon: '⚙️', to: 'profile' as Screen, tone: 'bg-[#475569]' },
     ],
   ]
@@ -1701,6 +1724,7 @@ export default function App() {
       case 'accommodation': return <AccommodationScreen state={state} nav={nav} />
       case 'pre-departure': return <PreDepartureScreen state={state} nav={nav} />
       case 'today-travel': return <TodayTravelScreen state={state} nav={nav} setState={setState} />
+      case 'weather': return <WeatherScreen nav={nav} />
       case 'directions': return <DirectionsScreen state={state} nav={nav} />
       case 'past-trips': return <PastTripsScreen state={state} nav={nav} setState={setState} />
       case 'notifications': return <NotificationsScreen nav={nav} setState={setState} />
