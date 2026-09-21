@@ -68,13 +68,9 @@ const INITIAL_NOTIFICATIONS: TravelNotification[] = [
   { id: 'taste-analysis', e: '🤖', title: 'AI 취향 분석 완료', body: '바다·맛집·휴식을 좋아하신다고 분석했어요.', unread: false, t: '3시간 전' },
   { id: 'itinerary-update', e: '✏️', title: '일정 변경', body: '동행자가 일정을 수정했어요.', unread: false, t: '어제' },
 ]
-const READ_NOTIFICATIONS_KEY = 'travel-mate:demo:read-notifications:v1'
 const unreadCount = (notifications: TravelNotification[]) => notifications.filter(item => item.unread).length
 function initialAppState(): AppState {
-  let readIds: unknown = []
-  try { readIds = JSON.parse(localStorage.getItem(READ_NOTIFICATIONS_KEY) ?? '[]') } catch { /* Keep default state if storage is unavailable. */ }
-  const read = new Set(Array.isArray(readIds) ? readIds.filter((id): id is string => typeof id === 'string') : [])
-  return { ...INIT, notifications: INITIAL_NOTIFICATIONS.map(item => ({ ...item, unread: item.unread && !read.has(item.id) })) }
+  return { ...INIT, notifications: INITIAL_NOTIFICATIONS.map(item => ({ ...item })) }
 }
 // ─── App State ────────────────────────────────────────────────────────────────
 interface AppState {
@@ -892,11 +888,7 @@ function MapScreen({ nav }: { nav: (s: Screen) => void }) {
       <div className="flex-1 relative min-h-0" aria-label="현재 위치 기반 지도">
         <MapContainer center={[location.lat, location.lng]} zoom={15} scrollWheelZoom className="h-full w-full" aria-label="OpenStreetMap 지도">
           <MapRecenter location={location} />
-          {mapStyle === 'standard' ? (
-            <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          ) : (
-            <TileLayer attribution='Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-          )}
+          <ExploreMapTiles style={mapStyle} />
           <CircleMarker center={[location.lat, location.lng]} radius={10} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#16A34A', fillOpacity: 1 }}>
             <Tooltip permanent direction="top" offset={[0, -12]}>현재 위치</Tooltip>
             <Popup><strong>{location.label}</strong><br />{locationStatus === 'gps' ? 'GPS 기반 위치' : 'GPS 미사용 시 기본 위치'}</Popup>
@@ -1292,20 +1284,97 @@ function AILoadingScreen({ nav }: { nav: (s: Screen) => void }) {
   )
 }
 
+function ExploreMapTiles({ style }: { style: 'standard' | 'satellite' }) {
+  return style === 'standard'
+    ? <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+    : <TileLayer attribution='Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+}
+
+// City-level overview centers; these are not recorded visit coordinates.
+const TRIP_MAP_REGIONS: { name: string; center: [number, number]; zoom: number }[] = [
+  { name: '강릉', center: [37.7519, 128.8761], zoom: 12 },
+  { name: '부산', center: [35.1796, 129.0756], zoom: 11 },
+  { name: '제주', center: [33.38, 126.55], zoom: 10 },
+  { name: '경주', center: [35.8562, 129.2247], zoom: 12 },
+  { name: '전주', center: [35.8242, 127.1480], zoom: 12 },
+  { name: '춘천', center: [37.8813, 127.7298], zoom: 12 },
+]
+
+function PastTripMap({ trip, back }: { trip: Trip; back: () => void }) {
+  const [style, setStyle] = useState<'standard' | 'satellite'>('standard')
+  const regionText = trip.selectedPlaces.map(place => place.region).join(' ') || trip.title
+  const regions = TRIP_MAP_REGIONS.filter(region => regionText.includes(region.name))
+  const region = regions[0]
+  return (
+    <section className="flex-shrink-0 bg-white" aria-label="지난 여행 지도">
+      <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+        <button type="button" onClick={back} aria-label="지난 여행 목록으로" className="flex size-[39.6px] shrink-0 items-center justify-center rounded-xl [&>svg]:scale-[0.48] focus-visible:outline-4 focus-visible:outline-[#4169D8]"><LeftIc /></button>
+        <div className="min-w-0"><h1 className="text-base font-bold text-gray-900">{trip.title}</h1><p className="text-sm text-gray-500">{fmtShort(trip.startDate)} ~ {fmtShort(trip.endDate)}</p></div>
+      </div>
+      <div className="flex items-center justify-between gap-2 px-4 pb-2">
+        <p className="text-sm font-semibold text-gray-600">여행 지역 지도</p>
+        <div className="flex gap-1 rounded-xl bg-gray-100 p-1" role="group" aria-label="지도 유형">
+          {([{ value: 'standard', label: '일반 지도' }, { value: 'satellite', label: '위성 지도' }] as const).map(option => <button type="button" key={option.value} aria-pressed={style === option.value} onClick={() => setStyle(option.value)} className={`min-h-11 rounded-lg px-3 text-sm font-bold focus-visible:outline-4 focus-visible:outline-[#4169D8] ${style === option.value ? 'bg-white text-[#4169D8] shadow-sm' : 'text-gray-600'}`}>{option.label}</button>)}
+        </div>
+      </div>
+      <div className="relative isolate h-[187.2px]">
+        <MapContainer key={trip.id} center={region?.center ?? [36.3, 127.8]} zoom={region?.zoom ?? 7} bounds={regions.length > 1 ? regions.map(item => item.center) : undefined} boundsOptions={{ padding: [24, 24] }} scrollWheelZoom={false} className="h-full w-full" aria-label={`${trip.title} 여행 지역 지도`}>
+          <ExploreMapTiles style={style} />
+        </MapContainer>
+      </div>
+    </section>
+  )
+}
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const { currentTrip, seniorMode: sm } = state
   const [dayIdx, setDayIdx] = useState(0); const [showAlt, setShowAlt] = useState(false)
   const [editMenu, setEditMenu] = useState<number | null>(null); const [showHard, setShowHard] = useState(false)
   const [hardSel, setHardSel] = useState<string[]>([])
+  const readOnly = currentTrip.status === 'past'
+  const [detail, setDetail] = useState<ScheduleItem | null>(null)
+  const detailHeading = useRef<HTMLHeadingElement>(null)
+  const detailTrigger = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    if (detail) detailHeading.current?.focus()
+    else detailTrigger.current?.focus()
+  }, [detail])
   const days = currentTrip.days
   const hardOpts = ['🚶 너무 많이 걸어요', '📍 장소가 너무 많아요', '🚗 이동시간이 길어요', '☕ 쉬는 시간 부족해요']
+  if (readOnly && detail) {
+    const place = [...currentTrip.selectedPlaces, ...YOUTUBE_SAVED].find(candidate => candidate.name === detail.place)
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-gray-50">
+        <PageHeader title="지난 여행 상세정보" back={() => setDetail(null)} />
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          {place && <div className="relative mb-5 h-48 overflow-hidden rounded-2xl">
+            <img src={placeImageUrl(place.img, 600, 400)} alt={place.name} className="h-full w-full object-cover" />
+            {place.img === jeonjuHanokImage && <a href="https://commons.wikimedia.org/wiki/File:Jeonju_Hanok_Village_20220701_001.jpg" target="_blank" rel="noreferrer" className="absolute bottom-2 left-2 rounded bg-black/75 px-2 py-1 text-xs text-white underline">사진: Mobius6 · CC BY-SA 4.0</a>}
+          </div>}
+          <p className="mb-2 text-sm font-semibold text-[#4169D8]">{currentTrip.title} · DAY {days[dayIdx].dayNumber}</p>
+          <h1 ref={detailHeading} tabIndex={-1} className="text-2xl font-bold text-gray-900 outline-none"><span aria-hidden="true">{detail.icon} </span>{detail.place}</h1>
+          <p className="mt-2 text-sm leading-6 text-gray-600">지난 여행에 기록된 정보입니다. 수정할 수 없어요.</p>
+          <dl className="mt-5 space-y-4 rounded-2xl bg-white p-5">
+            {[
+              ['방문 날짜', fmtDate(days[dayIdx].date)],
+              ['일정 시간', detail.time],
+              ...(place ? [['지역', place.region]] : []),
+              ['이동 정보', detail.transport || detail.walk || '기록된 이동 정보가 없어요.'],
+              ...(detail.rest ? [['휴식', '휴식이 포함된 일정이에요.']] : []),
+            ].map(([label, value]) => <div key={label}><dt className="text-sm text-gray-500">{label}</dt><dd className="mt-1 text-base font-semibold text-gray-900">{value}</dd></div>)}
+          </dl>
+          {detail.tags.length > 0 && <section className="mt-5"><h2 className="mb-2 text-base font-bold text-gray-900">일정 특징</h2><div className="flex flex-wrap gap-2">{detail.tags.map(tag => <Tag key={tag} label={tag} blue />)}</div></section>}
+        </div>
+        <div className="flex-shrink-0 border-t border-gray-100 bg-white p-5"><PrimaryBtn label="전체 일정으로 돌아가기" onClick={() => setDetail(null)} sm={sm} /></div>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <div className="relative h-44 flex-shrink-0">
+      {readOnly ? <PastTripMap trip={currentTrip} back={() => nav('past-trips')} /> : <div className="relative h-44 flex-shrink-0">
         <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=300&fit=crop" alt="지도" className="w-full h-full object-cover opacity-55" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent" />
-        <button onClick={() => nav('home')} className="absolute top-12 left-4 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center"><LeftIc /></button>
+        <button onClick={() => nav(readOnly ? 'past-trips' : 'home')} aria-label={readOnly ? '지난 여행 목록으로' : '홈으로'} className="absolute top-12 left-4 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center"><LeftIc /></button>
         <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
           <div className="bg-white rounded-xl px-3 py-2" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
             <p className="text-xs text-gray-400">{currentTrip.title}</p>
@@ -1324,7 +1393,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
             </div>
           ))}
         </div>
-      </div>
+      </div>}
       {/* Day tabs */}
       <div className="flex bg-white border-b border-gray-100 flex-shrink-0 overflow-x-auto scrollbar-hide">
         {days.map((d, i) => (
@@ -1346,9 +1415,14 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
               <div className="flex-1 bg-white rounded-2xl p-3" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
                 <div className="flex items-start justify-between">
                   <div><p className="text-xs text-[#4169D8] font-semibold">{item.time}</p><p className={`font-bold text-gray-900 ${sm ? 'text-base' : 'text-sm'}`}>{item.place}</p></div>
-                  <button onClick={() => setEditMenu(editMenu === i ? null : i)} className="p-1"><MoreIc /></button>
+                                    <button type="button" aria-label={readOnly ? `${item.place} 상세정보 보기` : `${item.place} 일정 편집`}
+                    onClick={event => {
+                      if (readOnly) { detailTrigger.current = event.currentTarget; setDetail(item) }
+                      else setEditMenu(editMenu === i ? null : i)
+                    }}
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl focus-visible:outline-4 focus-visible:outline-[#4169D8]"><MoreIc /></button>
                 </div>
-                {editMenu === i && (
+                {!readOnly && editMenu === i && (
                   <div className="mt-2 bg-gray-50 rounded-xl overflow-hidden">
                     {['장소 바꾸기', '순서 변경', '시간 변경', '삭제'].map(opt => (
                       <button key={opt} onClick={() => setEditMenu(null)}
@@ -1367,7 +1441,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
             </div>
           </div>
         ))}
-        {!showAlt ? (
+        {!readOnly && (!showAlt ? (
           <button onClick={() => setShowAlt(true)} className="w-full py-3.5 text-sm text-[#4169D8] font-semibold border-2 border-dashed border-[#4169D8]/30 rounded-2xl">다른 일정 보기</button>
         ) : (
           <div className="bg-[#EEF2FF] rounded-2xl p-4">
@@ -1376,11 +1450,13 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
             <p className="text-xs text-gray-500">• 다른 일정 2 — 맛집 집중 코스</p>
             <button className="mt-2 text-xs text-[#4169D8] font-semibold">선택하기 →</button>
           </div>
-        )}
+        ))}
       </div>
       {/* Bottom */}
       <div className="flex-shrink-0 bg-white border-t border-gray-100 px-5 py-3 space-y-2">
-        {showHard ? (
+        {readOnly ? (
+          <><p className="text-center text-sm text-gray-600">지난 여행은 상세정보만 확인할 수 있어요.</p><PrimaryBtn label="지난 여행 목록으로" onClick={() => nav('past-trips')} sm={sm} /></>
+        ) : showHard ? (
           <div className="bg-orange-50 rounded-2xl p-4">
             <p className="font-semibold text-gray-900 text-sm mb-2">어떤 점이 힘드세요?</p>
             <div className="flex flex-wrap gap-2 mb-3">
@@ -1654,7 +1730,7 @@ function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
           <RightIc />
         </button>
         {[
-          { e: '🗺', label: '내 여행 일정', to: 'itinerary' as Screen },
+          { e: '🗺', label: '내 여행 일정', to: 'today-travel' as Screen },
           { e: '✈️', label: '지난 여행', to: 'past-trips' as Screen },
           { e: '❤️', label: '내가 발견한 여행지', to: 'youtube-saved' as Screen },
           { e: '🔔', label: '알림', to: 'notifications' as Screen },
@@ -1676,11 +1752,7 @@ const NO_NAV: Screen[] = ['login', 'register', 'setup', 'analyzing', 'ai-loading
 
 export default function App() {
   const [state, setState] = useState<AppState>(initialAppState)
-  useEffect(() => {
-    try {
-      localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(state.notifications.filter(item => !item.unread).map(item => item.id)))
-    } catch { /* Reading notifications still works for this session when storage is blocked. */ }
-  }, [state.notifications])
+
   const startVoiceRef = useRef<(() => void) | null>(null)
   const nav = (screen: Screen) => {
     const navigate = () => setState(s => ({ ...s, screen, screenHistory: [...s.screenHistory, s.screen] }))
