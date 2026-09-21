@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import jeonjuHanokImage from './assets/jeonju-hanok.jpg'
-import { buildDays, type DayPlan } from './lib/itinerary'
+import { buildDays, type DayPlan, type ScheduleItem } from './lib/itinerary'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen =
@@ -81,7 +81,7 @@ interface AppState {
   screen: Screen; screenHistory: Screen[]
   seniorMode: boolean; userName: string; userPrefs: string[]; travelStyle: string
   currentTrip: Trip; notifications: TravelNotification[]
-  selectedPlace: Place | null; savedPlaces: Place[]; aiPrefs: string[]
+  selectedPlace: Place | null; activeSchedule: ScheduleItem | null; savedPlaces: Place[]; aiPrefs: string[]
   draft: { selectedPlaces?: Place[]; startDate?: string; endDate?: string; travelers?: number; transport?: string[]; budget?: string; companions?: Companion[] }
 }
 
@@ -89,7 +89,7 @@ const INIT: AppState = {
   screen: 'login', screenHistory: [],
   seniorMode: true, userName: '민우', userPrefs: ['바다', '맛집', '카페'], travelStyle: '여유롭게',
   currentTrip: UPCOMING, notifications: INITIAL_NOTIFICATIONS,
-  selectedPlace: null, savedPlaces: YOUTUBE_SAVED, aiPrefs: ['바다', '맛집', '휴식'],
+  selectedPlace: null, activeSchedule: null, savedPlaces: YOUTUBE_SAVED, aiPrefs: ['바다', '맛집', '휴식'],
   draft: {},
 }
 
@@ -307,7 +307,7 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
           <div className="grid grid-cols-2 gap-4">{current.map(item => <button key={item.label} onClick={() => nav(item.to)} className="min-h-40 rounded-3xl bg-[#F8FAFF] p-4 text-left active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span><span className="mt-1 block text-sm leading-5 text-gray-600">{item.description}</span></button>)}</div>
           <div className="mt-5 flex items-center justify-between gap-3"><button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="min-h-12 flex-1 rounded-2xl bg-gray-100 text-base font-bold text-gray-700 disabled:opacity-40">이전</button><div className="flex gap-2" aria-label={`기능 페이지 ${page + 1} / ${pages.length}`}>{pages.map((_, i) => <span key={i} className={`h-2.5 rounded-full transition-all ${page === i ? 'w-7 bg-[#4169D8]' : 'w-2.5 bg-gray-300'}`} />)}</div><button onClick={() => setPage(p => Math.min(pages.length - 1, p + 1))} disabled={page === pages.length - 1} className="min-h-12 flex-1 rounded-2xl bg-[#4169D8] text-base font-bold text-white disabled:opacity-40">다음</button></div>
         </section>
-        <button onClick={() => nav('comfort-travel')} className="mt-5 w-full rounded-3xl bg-[#172554] p-5 text-left text-white shadow-lg"><p className="text-base font-bold text-blue-200">다가오는 여행</p><h2 className="mt-1 text-2xl font-black">{trip.title}</h2><p className="mt-2 text-base text-blue-100">다음 일정과 길찾기를 큰 글씨로 확인하세요.</p><span className="mt-4 inline-flex min-h-12 items-center rounded-2xl bg-white px-4 text-base font-bold text-[#172554]">편안한 여행 열기</span></button>
+
       </main>
     </div>
   )
@@ -1478,118 +1478,67 @@ function PreDepartureScreen({ state, nav }: { state: AppState; nav: (s: Screen) 
 }
 
 // ─── Today Travel ─────────────────────────────────────────────────────────────
-function TodayTravelScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
+function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const { currentTrip, seniorMode: sm } = state
   const day = currentTrip.days[1] || currentTrip.days[0]
-  const [showDetail, setShowDetail] = useState(false)
+  const [selectedSchedule, setSelectedSchedule] = useState<ScheduleItem | null>(null)
   const schedule = day?.places || []
+  const itineraryCenter: [number, number] = [37.7519, 128.8761]
+  const routeOffsets: [number, number][] = [[-0.006, -0.009], [-0.001, -0.004], [0.003, -0.001], [0.005, 0.004], [0.001, 0.008]]
+  const openDirections = (item: ScheduleItem | undefined) => { if (item) setState(current => ({ ...current, activeSchedule: item })); nav('directions') }
+  const itineraryPoints = schedule.map((item, index) => {
+    const [latOffset, lngOffset] = routeOffsets[index % routeOffsets.length]
+    return { item, index, position: [itineraryCenter[0] + latOffset, itineraryCenter[1] + lngOffset] as [number, number] }
+  })
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="px-5 pt-12 pb-3 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
-        <button onClick={() => nav('home')}><LeftIc /></button>
-        <div className="text-center">
-          <h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1>
-          <p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p>
-        </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-white">
+      <div className="flex-shrink-0 border-b border-gray-100 px-5 pt-12 pb-3 flex items-center justify-between">
+        <button onClick={() => nav('home')} aria-label="홈으로 돌아가기"><LeftIc /></button>
+        <div className="text-center"><h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1><p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p></div>
         <div className="w-8" />
       </div>
-      <div className="relative h-40 bg-blue-50 flex-shrink-0">
-        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=250&fit=crop" alt="지도" className="w-full h-full object-cover opacity-60" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-white rounded-2xl px-4 py-2 flex items-center gap-2" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.12)' }}>
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-sm font-semibold text-gray-900">지금 여기</span>
-            <span className="text-gray-300">→</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-[#4169D8]" /><span className="text-sm font-semibold text-[#4169D8]">{schedule[1]?.place || '다음 장소'}</span>
-          </div>
-        </div>
+      <div className="relative h-48 flex-shrink-0 bg-blue-50" aria-label="오늘 일정 경로 지도">
+        <MapContainer center={itineraryCenter} zoom={13} scrollWheelZoom className="h-full w-full" aria-label="오늘 여행 일정 지도">
+          <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {itineraryPoints.length > 1 && <Polyline positions={itineraryPoints.map(point => point.position)} pathOptions={{ color: '#4169D8', weight: 4, opacity: 0.8 }} />}
+          {itineraryPoints.map(point => <CircleMarker key={`${point.item.time}-${point.item.place}`} center={point.position} radius={11} pathOptions={{ color: '#ffffff', weight: 3, fillColor: point.index === 0 ? '#16A34A' : '#4169D8', fillOpacity: 1 }} eventHandlers={{ click: () => setSelectedSchedule(point.item) }}><Tooltip permanent direction="center" className="!border-0 !bg-transparent !p-0 !font-bold !text-white !shadow-none">{point.index + 1}</Tooltip><Popup><strong>{point.item.time} · {point.item.place}</strong><br />지도를 눌러 상세 정보를 확인하세요.</Popup></CircleMarker>)}
+        </MapContainer>
+        <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-xl bg-white/95 px-3 py-2 shadow-md"><p className="text-xs font-bold text-[#4169D8]">오늘의 이동 경로</p><p className="mt-0.5 text-xs text-gray-600">지도 번호와 아래 일정 번호가 같아요.</p></div>
       </div>
-      <div className="px-5 py-3 bg-[#F0F4FF] flex-shrink-0">
-        <p className="text-xs text-gray-400 mb-1">현재 일정</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>{schedule[0]?.icon} {schedule[0]?.place}</p>
-            <p className="text-sm text-gray-400">{schedule[0]?.time}</p>
-          </div>
-          <button onClick={() => nav('directions')} className="h-10 px-4 rounded-xl bg-[#4169D8] text-white text-sm font-semibold flex items-center gap-1"><NavIc /> 길찾기</button>
-        </div>
+      <div className="flex-shrink-0 bg-[#F0F4FF] px-5 py-3"><p className="mb-1 text-xs text-gray-500">현재 일정</p><div className="flex items-center justify-between gap-3"><div><p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>{schedule[0]?.icon} {schedule[0]?.place}</p><p className="text-sm text-gray-500">{schedule[0]?.time}</p></div><button onClick={() => openDirections(schedule[0])} className="flex h-10 flex-shrink-0 items-center gap-1 rounded-xl bg-[#4169D8] px-4 text-sm font-semibold text-white"><NavIc /> 길찾기</button></div></div>
+      <div className="flex-1 min-h-0 space-y-2 overflow-y-auto px-5 py-3 scrollbar-hide">
+        {schedule.map((item, index) => <button key={`${item.time}-${item.place}`} onClick={() => setSelectedSchedule(item)} aria-label={`${item.place} 일정 자세히 보기`} className={`w-full rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.98] ${index === 1 ? 'border-[#4169D8] bg-[#EEF2FF]' : index === 0 ? 'border-green-300 bg-green-50' : 'border-transparent bg-white shadow-sm'}`}><div className="flex items-center gap-3"><span aria-hidden="true" className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${index === 0 ? 'bg-green-500' : 'bg-[#4169D8]'}`}>{index + 1}</span><span aria-hidden="true" className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm ${sm ? 'text-4xl' : ''}`}>{item.icon}</span><div className="min-w-0 flex-1"><p className="text-sm text-gray-500">{item.time}</p><p className={`truncate font-bold text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>{item.place}</p><p className="mt-1 truncate text-xs text-gray-500">{item.transport ? `🚕 ${item.transport}` : ''}{item.transport && item.walk ? ' · ' : ''}{item.walk ? `🚶 ${item.walk}` : '자세히 보기'}</p></div><span className="flex-shrink-0 text-xs font-bold text-[#4169D8]">상세</span></div></button>)}
       </div>
-      <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-3 space-y-2">
-        {schedule.map((s, i) => (
-          <button key={i} onClick={() => { if (i === 1) setShowDetail(true) }}
-            className={`w-full rounded-2xl p-4 flex items-center gap-3 text-left transition-all active:scale-95 ${i === 1 ? 'bg-[#EEF2FF] border-2 border-[#4169D8]' : i === 0 ? 'bg-green-50 border-2 border-green-300' : 'bg-white'}`}
-            style={i > 1 ? { boxShadow: '0 1px 6px rgba(0,0,0,0.05)' } : {}}>
-            <span className={sm ? 'text-3xl' : 'text-2xl'}>{s.icon}</span>
-            <div className="flex-1">
-              <p className="text-xs text-gray-400">{s.time}</p>
-              <p className={`font-bold text-gray-900 ${sm ? 'text-base' : 'text-sm'}`}>{s.place}</p>
-              {s.transport && <p className="text-xs text-gray-400">🚕 {s.transport}</p>}
-              {s.walk && <p className="text-xs text-gray-400">🚶 {s.walk}</p>}
-            </div>
-            {i === 1 && <span className="text-xs bg-[#4169D8] text-white px-2 py-1 rounded-lg font-bold">다음</span>}
-          </button>
-        ))}
-      </div>
-      {showDetail && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" onClick={() => setShowDetail(false)}>
-          <div className="bg-white w-full rounded-t-3xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
-            <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=200&fit=crop" alt="" className="w-full h-32 object-cover rounded-2xl mb-3" />
-            <h2 className="text-xl font-bold text-gray-900 mb-1">{schedule[1]?.place}</h2>
-            <p className="text-sm text-gray-400 mb-3">강원 강릉시</p>
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              {[{ e: '🕐', l: '24시간' }, { e: '🚶', l: '10분' }, { e: '🚻', l: '있음' }, { e: '🚗', l: '주차 가능' }].map((info, i) => (
-                <div key={i} className="bg-gray-50 rounded-xl p-2 text-center"><div className="text-base">{info.e}</div><p className="text-xs text-gray-500 mt-0.5">{info.l}</p></div>
-              ))}
-            </div>
-            <button onClick={() => nav('directions')} className="w-full h-12 rounded-2xl bg-[#4169D8] text-white font-bold text-sm flex items-center justify-center gap-2"><NavIc /> 길찾기</button>
-          </div>
-        </div>
-      )}
+      {selectedSchedule && <div className="absolute inset-0 z-50 flex items-end bg-black/50" onClick={() => setSelectedSchedule(null)}><section role="dialog" aria-modal="true" aria-labelledby="schedule-detail-title" className="max-h-[82%] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pt-3 pb-6 shadow-2xl" onClick={event => event.stopPropagation()}><div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-200" /><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#4169D8]">{selectedSchedule.time} 일정</p><h2 id="schedule-detail-title" className="mt-1 text-2xl font-black text-gray-900">{selectedSchedule.icon} {selectedSchedule.place}</h2></div><button onClick={() => setSelectedSchedule(null)} aria-label="일정 상세 닫기" className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-xl text-gray-700">×</button></div><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-[#F7F9FF] p-3"><p className="text-xs text-gray-500">이동</p><p className="mt-1 text-base font-bold text-gray-900">{selectedSchedule.transport || selectedSchedule.walk || '이동 정보 없음'}</p></div><div className="rounded-2xl bg-[#F7F9FF] p-3"><p className="text-xs text-gray-500">예상 비용</p><p className="mt-1 text-base font-bold text-gray-900">{selectedSchedule.cost || '무료'}</p></div></div><div className="mt-4"><p className="text-sm font-bold text-gray-900">이 일정의 특징</p><div className="mt-2 flex flex-wrap gap-2">{selectedSchedule.tags.map(tag => <span key={tag} className="rounded-full bg-[#EEF2FF] px-3 py-1.5 text-sm font-semibold text-[#2749A5]">{tag}</span>)}</div></div>{selectedSchedule.rest && <p className="mt-4 rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700">휴식하기 좋은 일정이에요.</p>}<button onClick={() => openDirections(selectedSchedule)} className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#4169D8] text-base font-bold text-white"><NavIc /> 해당 장소 길찾기</button></section></div>}
     </div>
   )
 }
-
 // ─── Directions ───────────────────────────────────────────────────────────────
-function DirectionsScreen({ nav }: { nav: (s: Screen) => void }) {
+function DirectionsScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [mode, setMode] = useState('택시')
   const modes = [{ id: '도보', t: '35분', cost: '무료' }, { id: '대중교통', t: '22분', cost: '1,500원' }, { id: '택시', t: '12분', cost: '8,000원' }, { id: '자동차', t: '10분', cost: '주차비 별도' }]
-  const sel = modes.find(m => m.id === mode)!
+  const selectedMode = modes.find(item => item.id === mode)!
+  const day = state.currentTrip.days[1] || state.currentTrip.days[0]
+  const schedule = day?.places || []
+  const destination = state.activeSchedule || schedule[1] || schedule[0]
+  const destinationIndex = Math.max(0, schedule.findIndex(item => item.time === destination?.time && item.place === destination?.place))
+  const center: [number, number] = [37.7519, 128.8761]
+  const offsets: [number, number][] = [[-0.006, -0.009], [-0.001, -0.004], [0.003, -0.001], [0.005, 0.004], [0.001, 0.008]]
+  const startPosition = [center[0] + offsets[0][0], center[1] + offsets[0][1]] as [number, number]
+  const destinationOffset = offsets[destinationIndex % offsets.length]
+  const destinationPosition = [center[0] + destinationOffset[0], center[1] + destinationOffset[1]] as [number, number]
+  const mapCenter = [(startPosition[0] + destinationPosition[0]) / 2, (startPosition[1] + destinationPosition[1]) / 2] as [number, number]
   return (
-    <div className="h-full bg-blue-50 flex flex-col">
-      <div className="px-5 pt-12 pb-3 flex items-center gap-3 bg-white border-b border-gray-100">
-        <button onClick={() => nav('today-travel')}><LeftIc /></button>
-        <h1 className="font-bold text-gray-900">길찾기</h1>
-      </div>
-      <div className="relative flex-1">
-        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=600&fit=crop" alt="지도" className="w-full h-full object-cover opacity-70" />
-        <div className="absolute inset-0 p-5 flex flex-col justify-between">
-          <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-green-500" /><div className="w-0.5 h-8 bg-gray-300" /><div className="w-3 h-3 rounded-full bg-[#4169D8]" />
-              </div>
-              <div className="space-y-2"><p className="text-sm font-semibold text-gray-900">현재 위치</p><p className="text-sm font-semibold text-[#4169D8]">안목해변</p></div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
-            <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide">
-              {modes.map(m => (
-                <button key={m.id} onClick={() => setMode(m.id)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${mode === m.id ? 'bg-[#4169D8] text-white' : 'bg-gray-100 text-gray-600'}`}>{m.id}</button>
-              ))}
-            </div>
-            <div className="flex justify-around text-center mb-3">
-              <div><p className="text-2xl font-bold text-[#4169D8]">{sel.t}</p><p className="text-xs text-gray-400">예상 시간</p></div>
-              <div><p className="text-xl font-bold text-gray-700">{sel.cost}</p><p className="text-xs text-gray-400">예상 비용</p></div>
-            </div>
-            <button className="w-full h-12 rounded-xl bg-[#4169D8] text-white font-bold text-sm">{mode} 이용하기</button>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden bg-blue-50">
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-5 pt-12 pb-3"><button onClick={() => nav('today-travel')} aria-label="오늘의 일정으로 돌아가기"><LeftIc /></button><h1 className="font-bold text-gray-900">길찾기</h1></div>
+      <div className="relative flex-1 min-h-0">
+        <MapContainer center={mapCenter} zoom={14} scrollWheelZoom className="h-full w-full" aria-label="선택한 일정 길찾기 지도"><TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><Polyline positions={[startPosition, destinationPosition]} pathOptions={{ color: '#4169D8', weight: 5, opacity: 0.85 }} /><CircleMarker center={startPosition} radius={10} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#16A34A', fillOpacity: 1 }}><Tooltip permanent direction="top">현재 일정</Tooltip></CircleMarker><CircleMarker center={destinationPosition} radius={11} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#4169D8', fillOpacity: 1 }}><Tooltip permanent direction="top">{destination?.place || '목적지'}</Tooltip><Popup><strong>{destination?.place || '다음 장소'}</strong></Popup></CircleMarker></MapContainer>
+        <div className="pointer-events-none absolute left-4 right-4 top-4 z-[500] rounded-2xl bg-white/95 p-4 shadow-lg"><div className="flex items-center gap-3"><div className="flex flex-col items-center gap-1"><div className="h-3 w-3 rounded-full bg-green-500" /><div className="h-7 w-0.5 bg-gray-300" /><div className="h-3 w-3 rounded-full bg-[#4169D8]" /></div><div className="space-y-2"><p className="text-sm font-semibold text-gray-900">현재 일정</p><p className="text-sm font-semibold text-[#4169D8]">{destination?.place || '다음 장소'}</p></div></div></div>
+        <div className="absolute bottom-0 left-0 right-0 z-[500] rounded-t-3xl bg-white p-5 shadow-[0_-4px_18px_rgba(0,0,0,0.12)]"><div className="mb-3 flex gap-2 overflow-x-auto scrollbar-hide">{modes.map(item => <button key={item.id} onClick={() => setMode(item.id)} className={`min-h-10 flex-shrink-0 rounded-full px-3 text-xs font-semibold ${mode === item.id ? 'bg-[#4169D8] text-white' : 'bg-gray-100 text-gray-600'}`}>{item.id}</button>)}</div><div className="mb-3 flex justify-around text-center"><div><p className="text-2xl font-bold text-[#4169D8]">{selectedMode.t}</p><p className="text-xs text-gray-400">예상 시간</p></div><div><p className="text-xl font-bold text-gray-700">{selectedMode.cost}</p><p className="text-xs text-gray-400">예상 비용</p></div></div><button className="h-12 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">{mode} 이용하기</button></div>
       </div>
     </div>
   )
 }
-
 // ─── Past Trips ───────────────────────────────────────────────────────────────
 function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const sm = state.seniorMode
@@ -1774,8 +1723,8 @@ export default function App() {
       case 'itinerary': return <ItineraryScreen state={state} nav={nav} />
       case 'accommodation': return <AccommodationScreen state={state} nav={nav} />
       case 'pre-departure': return <PreDepartureScreen state={state} nav={nav} />
-      case 'today-travel': return <TodayTravelScreen state={state} nav={nav} />
-      case 'directions': return <DirectionsScreen nav={nav} />
+      case 'today-travel': return <TodayTravelScreen state={state} nav={nav} setState={setState} />
+      case 'directions': return <DirectionsScreen state={state} nav={nav} />
       case 'past-trips': return <PastTripsScreen state={state} nav={nav} setState={setState} />
       case 'notifications': return <NotificationsScreen notifications={state.notifications} nav={nav} setState={setState} />
       case 'profile': return <ProfileScreen state={state} nav={nav} setState={setState} />
