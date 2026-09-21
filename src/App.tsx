@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen =
   | 'login' | 'register' | 'setup'
-  | 'home' | 'search-voice' | 'camera' | 'analyzing' | 'place-result'
+  | 'home' | 'search-text' | 'search-voice' | 'camera' | 'analyzing' | 'place-result'
   | 'youtube-saved' | 'ai-analysis' | 'taste-confirm'
   | 'place-detail' | 'map' | 'comfort-travel'
   | 'trip-places' | 'trip-date' | 'trip-people' | 'trip-transport'
@@ -304,7 +305,17 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
         <button onClick={() => nav('notifications')} aria-label="알림 열기" className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm"><BellIc />{state.notifs > 0 && <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />}</button>
       </header>
       <main className="px-5 pb-7">
-        <button onClick={() => nav('search-voice')} className="flex min-h-16 w-full items-center gap-3 rounded-3xl bg-white px-4 text-left shadow-sm" aria-label="여행지 검색 열기"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4169D8]"><SearchIc /></span><span className="flex-1"><span className="block text-base font-bold text-gray-900">어디로 여행 갈까요?</span><span className="block text-sm text-gray-500">말로 검색하거나 장소를 찾아보세요.</span></span><span className="rounded-xl bg-[#4169D8] px-3 py-2 text-sm font-bold text-white">검색</span></button>
+        <section aria-label="여행지 검색" className="rounded-3xl bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">어디로 여행 갈까요?</h2>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <button onClick={() => nav('search-text')} aria-label="텍스트 검색창 열기" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[#4169D8] bg-[#EEF2FF] text-[#2F4FBF] focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]">
+              <span aria-hidden="true" className="[&>svg]:size-9"><SearchIc /></span><span className="text-base font-bold">직접 입력</span>
+            </button>
+            <button onClick={() => nav('search-voice')} aria-label="음성 검색 시작" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-[#4169D8] text-white focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]">
+              <span aria-hidden="true" className="[&>svg]:size-9"><MicIc /></span><span className="text-base font-bold">말로 찾기</span>
+            </button>
+          </div>
+        </section>
         <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm" aria-label="주요 기능">
           <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-black text-gray-900">무엇을 도와드릴까요?</h2><span className="text-sm font-bold text-[#4169D8]">{page + 1} / {pages.length}</span></div>
           <div className="grid grid-cols-2 gap-4">{current.map(item => <button key={item.label} onClick={() => nav(item.to)} className="min-h-40 rounded-3xl bg-[#F8FAFF] p-4 text-left active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span><span className="mt-1 block text-sm leading-5 text-gray-600">{item.description}</span></button>)}</div>
@@ -454,33 +465,119 @@ function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void 
 }
 
 // ─── Voice Search ─────────────────────────────────────────────────────────────
-function VoiceSearchScreen({ nav }: { nav: (s: Screen) => void }) {
-  const [phase, setPhase] = useState<'listening' | 'result'>('listening')
-  useEffect(() => { const t = setTimeout(() => setPhase('result'), 2000); return () => clearTimeout(t) }, [])
+interface VoiceRecognition {
+  lang: string
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onerror: ((event: { error: string }) => void) | null
+  onend: (() => void) | null
+  onstart: (() => void) | null
+  start(): void
+  abort(): void
+}
+
+function PlaceSearchScreen({ voice, startVoiceRef, nav, onSelect }: { voice: boolean; startVoiceRef: React.RefObject<(() => void) | null>; nav: (s: Screen) => void; onSelect: (place: Place) => void }) {
+  const [query, setQuery] = useState('')
+  const [submitted, setSubmitted] = useState('')
+  const [message, setMessage] = useState('마이크 연결 중이에요. 권한 요청이 뜨면 허용해주세요.')
+  const [listening, setListening] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const recognitionRef = useRef<VoiceRecognition | null>(null)
+  useLayoutEffect(() => {
+    if (!voice) { inputRef.current?.focus(); return }
+    const browser = window as unknown as { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition }
+    const Recognition = browser.SpeechRecognition ?? browser.webkitSpeechRecognition
+    if (!Recognition) {
+      setMessage('이 브라우저는 음성 검색을 지원하지 않아요. 직접 입력으로 전환해주세요.')
+      inputRef.current?.focus()
+      return
+    }
+    const recognition = new Recognition()
+    recognitionRef.current = recognition
+    recognition.lang = 'ko-KR'
+    let received = false
+    let failed = false
+    recognition.onstart = () => { setStarting(false); setListening(true); setMessage('듣고 있어요. 여행지 이름을 말씀해주세요.') }
+    recognition.onresult = event => {
+      const text = event.results[0]?.[0]?.transcript?.trim() ?? ''
+      received = Boolean(text)
+      setQuery(text)
+      setSubmitted(text)
+      setMessage(text ? '말씀하신 내용으로 검색했어요. 검색어를 수정할 수도 있어요.' : '말씀을 듣지 못했어요. 다시 시도해주세요.')
+    }
+    recognition.onerror = event => {
+      failed = true
+      setStarting(false)
+      setListening(false)
+      setMessage(event.error === 'not-allowed' || event.error === 'service-not-allowed'
+        ? '마이크 권한을 허용하거나 직접 입력으로 전환해주세요.'
+        : '음성을 인식하지 못했어요. 마이크와 연결을 확인하거나 직접 입력해주세요.')
+    }
+    recognition.onend = () => {
+      setStarting(false)
+      setListening(false)
+      if (!received && !failed) setMessage('음성 입력이 끝났어요. 다시 말하거나 직접 입력해주세요.')
+    }
+    startVoiceRef.current = () => {
+      received = false
+      failed = false
+      setSubmitted('')
+      setStarting(true)
+      setMessage('마이크 연결 중이에요. 권한 요청이 뜨면 허용해주세요.')
+      try { recognition.start() } catch {
+        setStarting(false)
+        setMessage('마이크를 시작할 수 없어요. 다시 시도하거나 직접 입력해주세요.')
+      }
+    }
+    return () => {
+      startVoiceRef.current = null
+      recognition.onstart = null
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      recognition.abort()
+      recognitionRef.current = null
+    }
+  }, [voice, startVoiceRef])
+  const normalize = (value: string) => value.replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase()
+  const normalized = normalize(submitted)
+  const results = normalized ? YOUTUBE_SAVED.filter(place =>
+    [place.name, place.region, ...place.tags].some(value => normalize(value).includes(normalized))
+    || normalized.includes(normalize(place.name))
+  ) : []
   return (
-    <div className="h-full bg-white flex flex-col items-center justify-center px-6">
-      <button onClick={() => nav('home')} className="absolute top-12 right-5 p-2"><XIc /></button>
-      {phase === 'listening' ? (
-        <>
-          <div className="w-24 h-24 rounded-full bg-[#4169D8] flex items-center justify-center mb-6 animate-pulse shadow-xl text-white"><MicIc /></div>
-          <p className="text-xl font-bold text-gray-900">어디로 여행을 가고 싶으세요?</p>
-          <p className="text-sm text-gray-400 mt-2">말씀해주세요...</p>
-        </>
-      ) : (
-        <>
-          <div className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center mb-6 shadow-xl text-white text-3xl"><CheckIc /></div>
-          <p className="text-2xl font-bold text-gray-900 mb-1">"강릉 안목해변"</p>
-          <p className="text-sm text-gray-400 mb-8">인식되었어요</p>
-          <div className="w-full max-w-xs space-y-3">
-            <button onClick={() => nav('place-detail')} className="w-full h-12 rounded-2xl bg-[#4169D8] text-white font-bold">장소 상세보기</button>
-            <button onClick={() => nav('trip-places')} className="w-full h-12 rounded-2xl bg-[#EEF2FF] text-[#4169D8] font-bold">이 장소로 여행 만들기</button>
+    <div className="h-full min-h-0 flex flex-col bg-white [&_button]:focus-visible:outline-4 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-[#172554]">
+      <PageHeader title={voice ? '말로 여행지 찾기' : '여행지 검색'} back={() => nav('home')} />
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 py-6 ${voice && !submitted ? 'flex flex-col justify-center' : ''}`}>
+        {voice && <section className="mb-6 rounded-3xl bg-[#EEF2FF] px-5 py-10 text-center" aria-label="음성 입력">
+          <span aria-hidden="true" className={`mx-auto flex size-28 items-center justify-center rounded-full bg-[#4169D8] text-white shadow-lg [&>svg]:size-14 ${listening ? 'motion-safe:animate-pulse' : ''}`}><MicIc /></span><h2 className="mt-6 text-2xl font-bold text-gray-900">어디로 여행 갈까요?</h2>
+          <p role="status" className="mt-4 text-base font-semibold leading-7 text-gray-800">{message}</p>
+          <button onClick={() => { if (listening || starting) recognitionRef.current?.abort(); else startVoiceRef.current?.() }} className="mt-4 min-h-12 rounded-xl bg-white px-5 font-bold text-[#2F4FBF]">{listening || starting ? '음성 입력 중지' : '다시 말하기'}</button>
+        </section>}
+        {(!voice || Boolean(submitted)) && <><form onSubmit={event => { event.preventDefault(); recognitionRef.current?.abort(); setSubmitted(query.trim()) }}>
+          <label htmlFor="place-query" className="mb-3 block text-lg font-bold text-gray-900">어디로 여행 갈까요?</label>
+          <div className="flex gap-2">
+            <input ref={inputRef} id="place-query" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="예: 강릉, 바다, 안목해변" className="min-w-0 flex-1 rounded-2xl border-2 border-[#4169D8] px-3 py-4 text-base outline-none focus:ring-4 focus:ring-blue-200" />
+            <button type="submit" disabled={!query.trim()} className="min-h-14 shrink-0 rounded-2xl bg-[#4169D8] px-4 font-bold text-white disabled:opacity-40">찾기</button>
           </div>
-        </>
-      )}
+        </form>
+        </>}
+        {voice && <button onClick={() => nav('search-text')} className="min-h-14 w-full rounded-2xl border-2 border-[#4169D8] px-4 font-bold text-[#2F4FBF]">직접 입력으로 전환</button>}
+        {(!voice || Boolean(submitted)) && <div className="mt-6" aria-live="polite">
+          {!submitted ? <p className="text-base text-gray-600">가고 싶은 여행지 이름이나 지역을 입력해주세요.</p> : <>
+            <h2 className="text-lg font-bold text-gray-900">검색 결과 {results.length}곳</h2>
+            {results.length === 0 && <p className="mt-3 leading-7 text-gray-600">일치하는 여행지가 없어요. 다른 지역이나 짧은 검색어로 찾아보세요.</p>}
+            <div className="mt-3 space-y-3">{results.map(place => <button key={place.id} onClick={() => onSelect(place)} className="w-full rounded-2xl border border-gray-200 p-4 text-left">
+              <span className="block text-lg font-bold text-gray-900">{place.name}</span>
+              <span className="mt-1 block text-base text-gray-600">{place.region} · {place.tags.join(' · ')}</span>
+              <span className="mt-2 block font-semibold text-[#2F4FBF]">장소 자세히 보기 →</span>
+            </button>)}</div>
+          </>}
+        </div>}
+      </div>
     </div>
   )
 }
-
 // ─── Camera / Analyzing ───────────────────────────────────────────────────────
 function CameraScreen({ nav }: { nav: (s: Screen) => void }) {
   return (
@@ -1626,7 +1723,17 @@ const NO_NAV: Screen[] = ['login', 'register', 'setup', 'analyzing', 'ai-loading
 
 export default function App() {
   const [state, setState] = useState<AppState>(INIT)
-  const nav = (screen: Screen) => setState(s => ({ ...s, screen, screenHistory: [...s.screenHistory, s.screen] }))
+  const startVoiceRef = useRef<(() => void) | null>(null)
+  const nav = (screen: Screen) => {
+    const navigate = () => setState(s => ({ ...s, screen, screenHistory: [...s.screenHistory, s.screen] }))
+    if (screen === 'search-voice') {
+      // Mount the recognition handlers, then start within the user's click.
+      flushSync(navigate)
+      startVoiceRef.current?.()
+    } else {
+      navigate()
+    }
+  }
   const sm = state.seniorMode
   const showNav = NAV_SCREENS.includes(state.screen) && !NO_NAV.includes(state.screen)
 
@@ -1636,7 +1743,8 @@ export default function App() {
       case 'register': return <RegisterScreen onDone={() => nav('setup')} />
       case 'setup': return <SetupScreen onDone={(style, prefs, senior) => { setState(s => ({ ...s, travelStyle: style, userPrefs: prefs, seniorMode: senior })); nav('home') }} />
       case 'home': return <HomeScreen state={state} nav={nav} />
-      case 'search-voice': return <VoiceSearchScreen nav={nav} />
+      case 'search-text':
+      case 'search-voice': return <PlaceSearchScreen startVoiceRef={startVoiceRef} key={state.screen} voice={state.screen === 'search-voice'} nav={nav} onSelect={place => { setState(s => ({ ...s, selectedPlace: place })); nav('place-detail') }} />
       case 'camera': return <CameraScreen nav={nav} />
       case 'analyzing': return <AnalyzingScreen nav={nav} />
       case 'place-result': return <PlaceResultScreen nav={nav} setState={setState} />
