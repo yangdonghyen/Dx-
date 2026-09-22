@@ -996,62 +996,57 @@ function TripPlacesScreen({ state, nav, setState }: { state: AppState; nav: (s: 
 
 // ─── Trip: Date ───────────────────────────────────────────────────────────────
 // [기능] 여행 생성 2단계로 시작일과 종료일을 검증하며 선택한다.
+// [기능] 여행 생성 2단계에서 기기 기준 현재 월의 여행 날짜를 선택한다. 오늘 이전 날짜는 비활성화한다.
 function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
-  const [start, setStart] = useState(state.draft.startDate || ''); const [end, setEnd] = useState(state.draft.endDate || '')
-  const sm = state.seniorMode; const days30 = Array.from({ length: 30 }, (_, i) => i + 1)
-  const firstDay = new Date(2026, 8, 1).getDay()
-  // [기능] 날짜 선택 화면에서 시작일·종료일의 순서와 범위를 처리하는 내부 선택 함수다.
-  function pick(d: number) {
-    const iso = `2026-09-${String(d).padStart(2, '0')}`
+  const [start, setStart] = useState(state.draft.startDate || '')
+  const [end, setEnd] = useState(state.draft.endDate || '')
+  const sm = state.seniorMode
+  // 기기 기준 오늘 날짜를 사용해 현재 달력을 만들고, 오늘 이전 날짜는 선택 대상에서 제외한다.
+  const today = new Date()
+  const calendarYear = today.getFullYear()
+  const calendarMonth = today.getMonth()
+  const monthDays = Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, i) => i + 1)
+  const firstDay = new Date(calendarYear, calendarMonth, 1).getDay()
+  const toIso = (year: number, month: number, day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const todayIso = toIso(calendarYear, calendarMonth, today.getDate())
+
+  // [기능] 날짜 선택 화면에서 시작일·종료일의 순서와 오늘 이전 날짜 차단을 처리하는 내부 선택 함수다.
+  function pick(day: number) {
+    const iso = toIso(calendarYear, calendarMonth, day)
+    if (iso < todayIso) return
     if (!start || (start && end)) { setStart(iso); setEnd('') }
     else if (iso >= start) setEnd(iso)
     else { setEnd(start); setStart(iso) }
   }
-  const mk = (d: number) => `2026-09-${String(d).padStart(2, '0')}`
+
+  const mk = (day: number) => toIso(calendarYear, calendarMonth, day)
   const nights = start && end ? nightsCount(start, end) : 0
   const days = start && end ? dayCount(start, end) : 0
   return (
     <div className="h-full bg-white flex flex-col">
       <PageHeader title="날짜 선택" back={() => nav('trip-places')} />
-      <div className="px-5 py-3 flex-shrink-0">
-        <p className="text-sm font-semibold text-[#4169D8] mb-0.5">여행 만들기 2/6</p>
-        <p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>언제 떠나세요?</p>
-      </div>
+      <div className="px-5 py-3 flex-shrink-0"><p className="text-sm font-semibold text-[#4169D8] mb-0.5">여행 만들기 2/6</p><p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>언제 떠나세요?</p><p className="mt-1 text-xs text-gray-400">오늘 이전 날짜는 선택할 수 없어요.</p></div>
       <div className="flex-1 px-5">
         <div className="bg-white rounded-2xl p-4 mb-3" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-          <p className="text-center font-bold text-gray-900 mb-3">2026년 9월</p>
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {['일', '월', '화', '수', '목', '금', '토'].map(d => <div key={d} className="text-center text-xs text-gray-400 py-1">{d}</div>)}
-          </div>
+          <p className="text-center font-bold text-gray-900 mb-3">{calendarYear}년 {calendarMonth + 1}월</p>
+          <div className="grid grid-cols-7 gap-1 mb-1">{['일', '월', '화', '수', '목', '금', '토'].map(day => <div key={day} className="text-center text-xs text-gray-400 py-1">{day}</div>)}</div>
           <div className="grid grid-cols-7 gap-1">
-            {Array(firstDay).fill(null).map((_, i) => <div key={`e${i}`} />)}
-            {days30.map(d => {
-              const iso = mk(d); const isS = start === iso; const isE = end === iso
+            {Array(firstDay).fill(null).map((_, index) => <div key={`empty-${index}`} />)}
+            {monthDays.map(day => {
+              const iso = mk(day); const isStart = start === iso; const isEnd = end === iso
               const between = start && end && iso > start && iso < end
-              return (
-                <button key={d} onClick={() => pick(d)}
-                  className={`${sm ? 'h-11 text-base' : 'h-9 text-sm'} flex items-center justify-center rounded-full font-medium transition-all ${isS || isE ? 'bg-[#4169D8] text-white' : between ? 'bg-[#EEF2FF] text-[#4169D8]' : 'text-gray-700 hover:bg-gray-100'}`}>
-                  {d}
-                </button>
-              )
+              const isPast = iso < todayIso
+              return <button key={day} onClick={() => pick(day)} disabled={isPast} aria-label={isPast ? `${day}일은 지난 날짜로 선택할 수 없어요` : `${day}일 선택`}
+                className={`${sm ? 'h-11 text-base' : 'h-9 text-sm'} flex items-center justify-center font-medium transition-all ${isPast ? 'cursor-not-allowed text-gray-300' : isStart || isEnd ? 'rounded-full bg-[#4169D8] text-white' : between ? 'rounded-full bg-[#EEF2FF] text-[#4169D8]' : 'rounded-full text-gray-700 hover:bg-gray-100'}`}>{day}</button>
             })}
           </div>
         </div>
-        {start && end && (
-          <div className="bg-[#EEF2FF] rounded-2xl p-4 text-center mb-4">
-            <p className={`font-bold text-[#4169D8] ${sm ? 'text-xl' : 'text-lg'}`}>{fmtDate(start)} ~ {fmtDate(end)}</p>
-            <p className="text-sm text-gray-500 mt-1">{nights}박 {days}일 · DAY 1~{days}</p>
-          </div>
-        )}
+        {start && end && <div className="bg-[#EEF2FF] rounded-2xl p-4 text-center mb-4"><p className={`font-bold text-[#4169D8] ${sm ? 'text-xl' : 'text-lg'}`}>{fmtDate(start)} ~ {fmtDate(end)}</p><p className="text-sm text-gray-500 mt-1">{nights}박 {days}일 · DAY 1~{days}</p></div>}
       </div>
-      <div className="px-5 pb-6 flex-shrink-0">
-        <PrimaryBtn label="날짜 선택 완료" disabled={!start || !end}
-          onClick={() => { setState(s => ({ ...s, draft: { ...s.draft, startDate: start, endDate: end } })); nav('trip-people') }} sm={sm} />
-      </div>
+      <div className="px-5 pb-6 flex-shrink-0"><PrimaryBtn label="날짜 선택 완료" disabled={!start || !end} onClick={() => { setState(current => ({ ...current, draft: { ...current.draft, startDate: start, endDate: end } })); nav('trip-people') }} sm={sm} /></div>
     </div>
   )
 }
-
 // ─── Trip: People ─────────────────────────────────────────────────────────────
 // [기능] 여행 생성 단계에서 여행 인원수를 설정한다.
 function TripPeopleScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
