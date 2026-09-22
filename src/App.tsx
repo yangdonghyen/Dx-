@@ -1899,69 +1899,37 @@ function NotificationsScreen({ notifications, nav, setState }: { notifications: 
 }
 // ─── Profile ──────────────────────────────────────────────────────────────────
 // [기능] 사용자 정보, 접근성 설정, 여행 관리 메뉴와 선호 저장 기능을 제공한다.
+// [기능] 사용자 정보·여행 현황·빠른 메뉴·접근성 설정을 한눈에 확인하고 관리하는 마이페이지다.
+// [기능] 사용자 정보와 여행 관리·개인 설정을 카드형 빠른 메뉴로 한눈에 보여주는 마이페이지다.
 function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
-  const [editPrefs, setEditPrefs] = useState(false); const [prefs, setPrefs] = useState(state.userPrefs); const sm = state.seniorMode
-  const toggle = (p: string) => setPrefs(s => s.includes(p) ? s.filter(x => x !== p) : [...s, p])
-  // [기능] 프로필에서 변경한 사용자 선호값을 앱 전역 상태에 저장한다.
-  function savePrefs() { setState(s => ({ ...s, userPrefs: prefs })); setEditPrefs(false) }
+  const [editPrefs, setEditPrefs] = useState(false)
+  const [prefs, setPrefs] = useState(state.userPrefs)
+  const sm = state.seniorMode
+  const toggle = (pref: string) => setPrefs(current => current.includes(pref) ? current.filter(item => item !== pref) : [...current, pref])
+  const savePrefs = () => { setState(current => ({ ...current, userPrefs: prefs })); setEditPrefs(false) }
+  const travelMenus = [
+    { icon: '🗺️', label: '내 여행 일정', desc: '오늘 일정 확인', to: 'today-travel' as Screen, tone: 'bg-[#4169D8]' },
+    { icon: '✈️', label: '지난 여행', desc: '추억과 기록 보기', to: 'past-trips' as Screen, tone: 'bg-[#8B5E3C]' },
+    { icon: '❤️', label: '저장한 장소', desc: `${state.savedPlaces.length}곳 다시 보기`, to: 'youtube-saved' as Screen, tone: 'bg-[#D14D72]' },
+  ]
   return (
-    <div className="flex flex-col h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F0F4FF,#F7F8FF)' }}>
-      <div className="px-5 pt-12 pb-5 text-center">
-        <div className="w-20 h-20 rounded-full bg-[#4169D8] flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">{state.userName[0]}</div>
-        <h1 className={`font-bold text-gray-900 ${sm ? 'text-2xl' : 'text-xl'}`}>{state.userName}</h1>
-        <p className="text-sm text-gray-400">여행 {PAST_TRIPS.length}회 · 저장 {state.savedPlaces.length}곳</p>
-      </div>
-      <div className="px-5 space-y-3 pb-6">
-        {/* Senior toggle */}
-        <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3"><span className="text-2xl">🔎</span>
-              <div><p className="font-semibold text-gray-900">시니어 모드</p><p className="text-xs text-gray-400">크고 단순하게 표시</p></div>
-            </div>
-            <button onClick={() => setState(s => ({ ...s, seniorMode: !s.seniorMode }))}
-              className={`w-12 h-6 rounded-full transition-all relative ${sm ? 'bg-[#4169D8]' : 'bg-gray-200'}`}>
-              <div className={`w-5 h-5 rounded-full bg-white shadow absolute top-0.5 transition-all ${sm ? 'left-6' : 'left-0.5'}`} />
-            </button>
+    <div className="h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F3F7FF 0%,#F9F5FF 50%,#F2FBF8 100%)' }}>
+      <header className="px-5 pt-12 pb-5"><p className="text-sm font-bold text-[#4169D8]">여행메이트</p><h1 className={`mt-1 font-black text-gray-900 ${sm ? 'text-3xl' : 'text-2xl'}`}>마이페이지</h1></header>
+      <main className="space-y-5 px-5 pb-8">
+        <section className="rounded-3xl bg-white p-5 shadow-sm"><div className="flex items-center gap-4"><div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-3xl bg-[#4169D8] text-3xl font-black text-white">{state.userName[0]}</div><div><p className={`font-black text-gray-900 ${sm ? 'text-2xl' : 'text-xl'}`}>{state.userName}님</p></div></div><div className="mt-5 grid grid-cols-3 divide-x divide-gray-100 rounded-2xl bg-[#F8FAFF] py-3 text-center"><div><p className="text-xs text-gray-500">지난 여행</p><p className="mt-1 text-lg font-black text-gray-900">{PAST_TRIPS.length}회</p></div><div><p className="text-xs text-gray-500">저장 장소</p><p className="mt-1 text-lg font-black text-gray-900">{state.savedPlaces.length}곳</p></div><div><p className="text-xs text-gray-500">여행 취향</p><p className="mt-1 text-lg font-black text-gray-900">{state.userPrefs.length}개</p></div></div></section>
+        <section aria-label="마이페이지 메뉴" className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="grid grid-cols-2 gap-4">
+            {travelMenus.map(card => <button key={card.label} onClick={() => nav(card.to)} className="h-36 rounded-3xl bg-white p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-sm ${card.tone}`}>{card.icon}</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>{card.label}</span><span className="mt-1 block text-sm leading-5 text-gray-600">{card.desc}</span></button>)}
+            <button onClick={() => setEditPrefs(editing => !editing)} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${editPrefs ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#D14D72] text-2xl shadow-sm">❤️</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>여행 취향</span><span className="mt-1 block text-sm leading-5 text-gray-600">{editPrefs ? '취향을 선택 중이에요' : `${state.userPrefs.length}개 설정됨`}</span></button>
+            <button onClick={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${sm ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F766E] text-2xl shadow-sm">🔎</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>시니어 모드</span><span className="mt-1 block text-sm leading-5 text-gray-600">{sm ? '큰 글씨로 사용 중' : '기본 화면 사용 중'}</span></button>
+            <button onClick={() => nav('ai-analysis')} className="h-36 rounded-3xl bg-[#F4F1FF] p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#6B52D3] text-2xl shadow-sm">🤖</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>AI 취향 재분석</span><span className="mt-1 block text-sm leading-5 text-gray-600">최근 저장한 장소를 바탕으로 다시 분석해요.</span></button>
           </div>
-        </div>
-        {/* Prefs */}
-        <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3"><span className="text-2xl">❤️</span><p className="font-semibold text-gray-900">여행 취향</p></div>
-            <button onClick={() => setEditPrefs(!editPrefs)} className="text-sm text-[#4169D8] font-semibold">수정</button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(editPrefs ? ALL_PREFS : state.userPrefs).map(p => (
-              <button key={p} onClick={() => editPrefs && toggle(p)}
-                className={`text-sm px-3 py-1 rounded-full border-2 transition-all ${(editPrefs ? prefs : state.userPrefs).includes(p) ? 'bg-[#4169D8] border-[#4169D8] text-white' : editPrefs ? 'bg-white border-gray-200 text-gray-600' : 'bg-[#EEF2FF] text-[#4169D8] border-[#EEF2FF]'}`}>
-                {PREFS_E[p]} {p}
-              </button>
-            ))}
-          </div>
-          {editPrefs && <button onClick={savePrefs} className="w-full mt-3 h-10 rounded-xl bg-[#4169D8] text-white font-bold text-sm">저장하기</button>}
-        </div>
-        {/* AI analysis */}
-        <button onClick={() => nav('ai-analysis')} className="w-full bg-white rounded-2xl p-4 flex items-center justify-between active:scale-95" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-          <div className="flex items-center gap-3"><YtIc /><p className="font-semibold text-gray-900">AI 취향 재분석</p></div>
-          <RightIc />
-        </button>
-        {[
-          { e: '🗺', label: '내 여행 일정', to: 'today-travel' as Screen },
-          { e: '✈️', label: '지난 여행', to: 'past-trips' as Screen },
-          { e: '❤️', label: '내가 발견한 여행지', to: 'youtube-saved' as Screen },
-          { e: '🔔', label: '알림', to: 'notifications' as Screen },
-        ].map(m => (
-          <button key={m.label} onClick={() => nav(m.to)}
-            className="w-full bg-white rounded-2xl p-4 flex items-center justify-between active:scale-95" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-            <div className="flex items-center gap-3"><span className="text-2xl">{m.e}</span><p className="font-semibold text-gray-900">{m.label}</p></div>
-            <RightIc />
-          </button>
-        ))}
-      </div>
+          {editPrefs && <div className="mt-4 rounded-3xl bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h3 className="font-black text-gray-900">좋아하는 여행 스타일</h3><button onClick={() => setEditPrefs(false)} className="text-sm font-bold text-gray-500">닫기</button></div><div className="mt-4 flex flex-wrap gap-2">{ALL_PREFS.map(pref => <button key={pref} onClick={() => toggle(pref)} className={`rounded-full border-2 px-3 py-2 text-sm font-semibold ${prefs.includes(pref) ? 'border-[#4169D8] bg-[#4169D8] text-white' : 'border-gray-200 bg-white text-gray-600'}`}>{PREFS_E[pref]} {pref}</button>)}</div><button onClick={savePrefs} className="mt-4 min-h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">여행 취향 저장하기</button></div>}
+        </section>
+        </main>
     </div>
   )
 }
-
 // ─── App ──────────────────────────────────────────────────────────────────────
 const NAV_SCREENS: Screen[] = ['home', 'map', 'youtube-saved', 'profile', 'past-trips', 'notifications', 'itinerary']
 const NO_NAV: Screen[] = ['login', 'register', 'setup', 'analyzing', 'ai-loading', 'camera']
@@ -1971,7 +1939,7 @@ export default function App() {
   const [showRainAlert, setShowRainAlert] = useState(false)
   const rainAlertShown = useRef(false)
 
-  // 로그인·설정 후 홈에 처음 도착하면 재난문자 스타일의 날씨 알림을 5초 동안 보여준다.
+  // 로그인·설정 후 홈에 처음 도착하면 일반 날씨 알림을 5초 동안 보여준다.
   useEffect(() => {
     if (state.screen !== 'home' || rainAlertShown.current) return
     rainAlertShown.current = true
