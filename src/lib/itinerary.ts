@@ -1,3 +1,9 @@
+/**
+ * 일정 생성 도메인 로직.
+ * 선택 장소와 여행 기간을 바탕으로 일차별 방문 순서·식사·휴식·교통 정보를 포함한 DayPlan을 만든다.
+ * 실제 경로·영업 정보 API가 아닌 로컬 후보 데이터 기반의 추천 알고리즘이다.
+ */
+
 export interface ScheduleItem { time: string; place: string; icon: string; tags: string[]; walk: string; cost: string; rest: boolean; transport?: string }
 export interface DayPlan { dayNumber: number; date: string; places: ScheduleItem[]; notice?: string }
 interface Destination { name: string; region: string; tags: string[] }
@@ -12,7 +18,9 @@ const REGIONAL_PLACES: Record<string, string[]> = {
   '춘천': ['남이섬', '소양강스카이워크', '춘천 명동닭갈비골목', '김유정문학촌', '강촌레일파크', '제이드가든', '구봉산 전망대', '춘천 삼악산 호수케이블카', '공지천', '의암호', '춘천 애니메이션박물관', '국립춘천박물관', '청평사', '소양강댐', '춘천막국수체험박물관', '춘천중앙시장', '강원도립화목원', '춘천 육림고개', '춘천 칠층석탑', '봉의산', '춘천향교', '죽림동성당', '춘천 문학공원', '춘천 인형극장', '춘천 토이로봇관', '춘천 물레길', '강촌 구곡폭포', '등선폭포', '춘천 레고랜드', '춘천 이상원미술관'],
 }
 
+// 날짜 차이를 일 단위로 계산하기 위한 밀리초 상수.
 const DAY_MS = 86_400_000
+// 입력 날짜가 YYYY-MM-DD 형식의 실제 날짜인지 검증하고 UTC 자정 타임스탬프로 변환한다.
 function parseDate(value: string): number {
   const timestamp = Date.parse(value + 'T00:00:00Z')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) {
@@ -21,6 +29,7 @@ function parseDate(value: string): number {
   return timestamp
 }
 
+// 선택 장소를 우선 배치하고, 지역별 후보 장소·식사·휴식·숙소 이벤트를 포함해 일차별 일정으로 만든다.
 export function buildDays(startDate: string, endDate: string, selectedPlaces: Destination[], transport: string[] = []): DayPlan[] {
   const start = parseDate(startDate)
   const count = (parseDate(endDate) - start) / DAY_MS + 1

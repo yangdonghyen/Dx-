@@ -1,3 +1,8 @@
+/**
+ * 여행메이트 단일 페이지 애플리케이션.
+ * 로그인부터 여행 생성, 지도 탐색, 일정 확인, 길찾기, 지난 여행 관리까지의 화면 전환과
+ * 사용자 상태를 이 파일에서 관리한다. 화면 전환은 App 컴포넌트의 nav 함수와 AppState로 제어한다.
+ */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
@@ -25,6 +30,7 @@ interface Trip {
   selectedPlaces: Place[]
 }
 
+// [기능] 저장된 장소의 이미지 식별자를 화면에 사용할 URL로 변환한다. 로컬 저작권 이미지는 외부 URL로 바꾸지 않는다.
 function placeImageUrl(image: string, width: number, height: number) {
   return image === jeonjuHanokImage ? image : `https://images.unsplash.com/${image}?w=${width}&h=${height}&fit=crop`
 }
@@ -69,6 +75,7 @@ const INITIAL_NOTIFICATIONS: TravelNotification[] = [
   { id: 'itinerary-update', e: '✏️', title: '일정 변경', body: '동행자가 일정을 수정했어요.', unread: false, t: '어제' },
 ]
 const unreadCount = (notifications: TravelNotification[]) => notifications.filter(item => item.unread).length
+// [기능] 로그아웃 또는 앱 재시작 시 사용할 초기 사용자·여행·알림 상태를 생성한다.
 function initialAppState(): AppState {
   return { ...INIT, notifications: INITIAL_NOTIFICATIONS.map(item => ({ ...item })) }
 }
@@ -110,10 +117,12 @@ const CheckIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const YtIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 00-1.95 1.96A29 29 0 001 12a29 29 0 00.46 5.58a2.78 2.78 0 001.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 001.95-1.95A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon fill="white" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
+// [기능] 장소와 일정의 특징을 작은 태그 형태로 표시하는 공통 UI 컴포넌트다.
 function Tag({ label, blue }: { label: string; blue?: boolean }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${blue ? 'bg-[#EEF2FF] text-[#4169D8]' : 'bg-gray-100 text-gray-500'}`}>{label}</span>
 }
 
+// [기능] 홈·지도·여행·마이페이지 사이를 이동시키는 하단 고정 내비게이션이다.
 function BottomNav({ active, nav, sm, notifs }: { active: string; nav: (s: Screen) => void; sm: boolean; notifs: number }) {
   const tabs = [
     { id: 'home', label: '홈', icon: <HomeIc /> },
@@ -137,6 +146,7 @@ function BottomNav({ active, nav, sm, notifs }: { active: string; nav: (s: Scree
   )
 }
 
+// [기능] 뒤로 가기 동작과 페이지 제목을 일관된 형태로 제공하는 상단 헤더다.
 function PageHeader({ title, back, right }: { title?: string; back?: () => void; right?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white border-b border-gray-50 flex-shrink-0">
@@ -147,6 +157,7 @@ function PageHeader({ title, back, right }: { title?: string; back?: () => void;
   )
 }
 
+// [기능] 시니어 모드의 큰 터치 영역까지 지원하는 주요 행동 버튼 공통 컴포넌트다.
 function PrimaryBtn({ label, onClick, disabled, sm, gradient }: { label: string; onClick?: () => void; disabled?: boolean; sm?: boolean; gradient?: boolean }) {
   return (
     <button onClick={onClick} disabled={disabled}
@@ -158,6 +169,7 @@ function PrimaryBtn({ label, onClick, disabled, sm, gradient }: { label: string;
 }
 
 // ─── Login / Register ─────────────────────────────────────────────────────────
+// [기능] 앱 최초 진입 화면으로 일반 로그인, 계정 찾기 및 소셜 로그인 진입점을 제공한다.
 function LoginScreen({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
   const [id, setId] = useState('')
   const [pw, setPw] = useState('')
@@ -196,6 +208,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: () => void; onRegister:
     </div>
   )
 }
+// [기능] 새 사용자 등록 정보를 입력받고 온보딩 설정 화면으로 이동시킨다.
 function RegisterScreen({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: '', email: '', pw: '', pw2: '' })
   return (
@@ -216,6 +229,7 @@ function RegisterScreen({ onDone }: { onDone: () => void }) {
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
+// [기능] 사용자 여행 취향과 접근성 선호를 설정해 홈 화면 경험에 반영한다.
 function SetupScreen({ onDone }: { onDone: (style: string, prefs: string[], senior: boolean) => void }) {
   const [style, setStyle] = useState('여유롭게')
   const [prefs, setPrefs] = useState<string[]>(['바다', '맛집', '카페'])
@@ -262,6 +276,7 @@ function SetupScreen({ onDone }: { onDone: (style: string, prefs: string[], seni
   )
 }
 
+// [기능] 홈의 오늘 날씨 타일에서 여는 날씨 상세 화면이다. 날씨별 Plan A/B/C 일정을 전환해 보여준다.
 function WeatherScreen({ nav }: { nav: (s: Screen) => void }) {
   const [plan, setPlan] = useState<'A' | 'B' | 'C'>('A')
   const plans = {
@@ -285,6 +300,7 @@ function WeatherScreen({ nav }: { nav: (s: Screen) => void }) {
     </div>
   )
 }
+// [기능] 시니어 모드 홈 화면이다. 큰 기능 타일을 두 페이지로 나누고 명확한 이동 경로를 제공한다.
 function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [page, setPage] = useState(0)
   const pages = [
@@ -332,6 +348,7 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
   )
 }
 // ─── Home ─────────────────────────────────────────────────────────────────────
+// [기능] 일반 모드 홈 화면이다. 여행 생성, 예정 여행, 저장 장소 및 지난 여행 진입점을 구성한다.
 function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const { userName, currentTrip, savedPlaces, seniorMode: sm } = state
   const notifs = unreadCount(state.notifications)
@@ -481,6 +498,7 @@ interface VoiceRecognition {
   abort(): void
 }
 
+// [기능] 텍스트/음성 입력으로 장소를 검색하고 브라우저 음성 인식 권한 및 오류 상태를 처리한다.
 function PlaceSearchScreen({ voice, startVoiceRef, nav, onSelect }: { voice: boolean; startVoiceRef: React.RefObject<(() => void) | null>; nav: (s: Screen) => void; onSelect: (place: Place) => void }) {
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
@@ -585,6 +603,7 @@ function PlaceSearchScreen({ voice, startVoiceRef, nav, onSelect }: { voice: boo
   )
 }
 // ─── Camera / Analyzing ───────────────────────────────────────────────────────
+// [기능] 카메라 또는 사진 선택을 통해 여행 장소를 찾는 흐름을 안내한다.
 function CameraScreen({ nav }: { nav: (s: Screen) => void }) {
   return (
     <div className="h-full bg-black flex flex-col">
@@ -610,6 +629,7 @@ function CameraScreen({ nav }: { nav: (s: Screen) => void }) {
   )
 }
 
+// [기능] 사진 또는 입력 정보를 AI가 분석하는 중간 로딩 상태를 표시한다.
 function AnalyzingScreen({ nav }: { nav: (s: Screen) => void }) {
   const [step, setStep] = useState(0)
   const msgs = ['사진 속 장소를 찾고 있어요...', '위치 정보를 분석하고 있어요...', '장소를 확인했어요!']
@@ -628,6 +648,7 @@ function AnalyzingScreen({ nav }: { nav: (s: Screen) => void }) {
   )
 }
 
+// [기능] 분석·검색 결과로 찾은 장소의 요약 정보를 보여주고 다음 행동을 연결한다.
 function PlaceResultScreen({ nav, setState }: { nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const places = [
     { id: 'p1', name: '안목해변', region: '강원 강릉시', tags: ['바다', '카페', '산책'], img: 'photo-1507525428034-b723cf961d3e', primary: true },
@@ -666,6 +687,7 @@ function PlaceResultScreen({ nav, setState }: { nav: (s: Screen) => void; setSta
 }
 
 // ─── YouTube Saved ────────────────────────────────────────────────────────────
+// [기능] YouTube 등에서 저장한 장소 목록을 관리하고 여행 계획에 추가할 수 있게 한다.
 function YouTubeSavedScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const sm = state.seniorMode
   return (
@@ -706,6 +728,7 @@ function YouTubeSavedScreen({ state, nav, setState }: { state: AppState; nav: (s
 }
 
 // ─── AI Analysis / Taste ─────────────────────────────────────────────────────
+// [기능] 저장 장소와 사용자 취향을 바탕으로 AI 취향 분석 결과를 보여준다.
 function AIAnalysisScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [done, setDone] = useState(false)
   useEffect(() => { const t = setTimeout(() => setDone(true), 2000); return () => clearTimeout(t) }, [])
@@ -747,6 +770,7 @@ function AIAnalysisScreen({ state, nav, setState }: { state: AppState; nav: (s: 
   )
 }
 
+// [기능] AI가 추정한 여행 취향을 사용자가 확인·수정한 뒤 여행 생성에 반영하게 한다.
 function TasteConfirmScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [prefs, setPrefs] = useState(state.aiPrefs)
   const toggle = (p: string) => setPrefs(s => s.includes(p) ? s.filter(x => x !== p) : [...s, p])
@@ -769,6 +793,7 @@ function TasteConfirmScreen({ state, nav, setState }: { state: AppState; nav: (s
 }
 
 // ─── Place Detail ─────────────────────────────────────────────────────────────
+// [기능] 선택 장소의 이미지, 태그, 평점과 여행 계획 추가 행동을 제공하는 상세 화면이다.
 function PlaceDetailScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [saved, setSaved] = useState(true)
   const p = state.selectedPlace || YOUTUBE_SAVED[0]; const sm = state.seniorMode
@@ -831,6 +856,7 @@ const MAP_PTS = [
 
 type MapLocation = { lat: number; lng: number; label: string }
 
+// [기능] GPS 또는 기본 위치가 변경될 때 Leaflet 지도의 중심 좌표를 최신 위치로 이동시킨다.
 function MapRecenter({ location }: { location: MapLocation }) {
   const map = useMap()
   useEffect(() => {
@@ -838,6 +864,7 @@ function MapRecenter({ location }: { location: MapLocation }) {
   }, [location.lat, location.lng, map])
   return null
 }
+// [기능] 큰 글씨와 단순한 행동을 중심으로 구성한 시니어 친화 여행 보조 화면이다.
 function ComfortTravelScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const trip = state.currentTrip
   const next = trip.days[0]?.places[0]
@@ -854,6 +881,7 @@ function ComfortTravelScreen({ state, nav }: { state: AppState; nav: (s: Screen)
     </div>
   )
 }
+// [기능] GPS 현재 위치(실패 시 송하동 기본값)를 중심으로 장소 탐색, 분류, 일반/위성 지도를 제공한다.
 function MapScreen({ nav }: { nav: (s: Screen) => void }) {
   const [cat, setCat] = useState('전체')
   const [sel, setSel] = useState<typeof MAP_PTS[0] | null>(null)
@@ -925,6 +953,7 @@ function MapScreen({ nav }: { nav: (s: Screen) => void }) {
   )
 }
 // ─── Trip: Places ─────────────────────────────────────────────────────────────
+// [기능] 여행 생성 1단계로 사용자가 방문 후보 장소를 복수 선택한다.
 function TripPlacesScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [sel, setSel] = useState<Place[]>(state.draft.selectedPlaces || [])
   const toggle = (p: Place) => setSel(s => s.find(x => x.id === p.id) ? s.filter(x => x.id !== p.id) : [...s, p])
@@ -967,10 +996,12 @@ function TripPlacesScreen({ state, nav, setState }: { state: AppState; nav: (s: 
 }
 
 // ─── Trip: Date ───────────────────────────────────────────────────────────────
+// [기능] 여행 생성 2단계로 시작일과 종료일을 검증하며 선택한다.
 function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [start, setStart] = useState(state.draft.startDate || ''); const [end, setEnd] = useState(state.draft.endDate || '')
   const sm = state.seniorMode; const days30 = Array.from({ length: 30 }, (_, i) => i + 1)
   const firstDay = new Date(2026, 8, 1).getDay()
+  // [기능] 날짜 선택 화면에서 시작일·종료일의 순서와 범위를 처리하는 내부 선택 함수다.
   function pick(d: number) {
     const iso = `2026-09-${String(d).padStart(2, '0')}`
     if (!start || (start && end)) { setStart(iso); setEnd('') }
@@ -1023,6 +1054,7 @@ function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Sc
 }
 
 // ─── Trip: People ─────────────────────────────────────────────────────────────
+// [기능] 여행 생성 단계에서 여행 인원수를 설정한다.
 function TripPeopleScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [count, setCount] = useState(state.draft.travelers || 2); const sm = state.seniorMode
   const labels = ['혼자', '2명', '3명', '4명', '5명 이상']
@@ -1058,6 +1090,7 @@ function TripPeopleScreen({ state, nav, setState }: { state: AppState; nav: (s: 
 }
 
 // ─── Trip: Transport ──────────────────────────────────────────────────────────
+// [기능] 여행 생성 단계에서 사용할 이동수단을 복수 선택한다.
 function TripTransportScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [sel, setSel] = useState<string[]>(state.draft.transport || []); const sm = state.seniorMode
   const toggle = (id: string) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
@@ -1097,6 +1130,7 @@ const BUDGETS = [
   { id: '저예산', desc: '10만원 이하', e: '💚' }, { id: '보통', desc: '10~30만원', e: '💛' },
   { id: '여유롭게', desc: '30~50만원', e: '🧡' }, { id: '넉넉하게', desc: '50만원 이상', e: '❤️' },
 ]
+// [기능] 여행 생성 단계에서 예산 범위를 선택한다.
 function TripBudgetScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [sel, setSel] = useState(state.draft.budget || ''); const [custom, setCustom] = useState(''); const sm = state.seniorMode
   return (
@@ -1139,6 +1173,7 @@ function TripBudgetScreen({ state, nav, setState }: { state: AppState; nav: (s: 
 }
 
 // ─── Trip: Companions ─────────────────────────────────────────────────────────
+// [기능] 동행자의 취향·보행 조건을 입력해 일정 추천 기준에 반영한다.
 function TripCompanionsScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [companions, setCompanions] = useState<Companion[]>(state.draft.companions || [{ name: '아빠', age: '60대', prefs: ['자연'], walking: '30분 정도', avoid: ['등산'] }])
   const [editIdx, setEditIdx] = useState<number | null>(null); const sm = state.seniorMode
@@ -1146,6 +1181,7 @@ function TripCompanionsScreen({ state, nav, setState }: { state: AppState; nav: 
   const walkings = ['10분 이내', '30분 정도', '1시간 정도', '걷기 괜찮음']
   const avoids = ['장시간 걷기', '계단', '등산', '사람 많은 곳', '야외 활동']
   const extras = ['택시 적극 이용', '실내 선호', '화장실 가까운 곳', '한적한 장소']
+  // [기능] 입력한 동행자 정보를 목록에 추가하고 다음 동행자 입력을 위한 상태를 초기화한다.
   function addComp() {
     const nc = [...companions, { name: `동행자 ${companions.length + 1}`, age: '30대', prefs: [], walking: '30분 정도', avoid: [] }]
     setCompanions(nc); setEditIdx(nc.length - 1)
@@ -1240,6 +1276,7 @@ function TripCompanionsScreen({ state, nav, setState }: { state: AppState; nav: 
 }
 
 // ─── Trip Confirm ─────────────────────────────────────────────────────────────
+// [기능] 여행 생성 입력값을 최종 확인하고 AppState의 현재 여행 데이터로 저장한다.
 function TripConfirmScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const d = state.draft; const sm = state.seniorMode
   const places = d.selectedPlaces || state.savedPlaces.slice(0, 2)
@@ -1288,25 +1325,33 @@ function TripConfirmScreen({ state, nav, setState }: { state: AppState; nav: (s:
 }
 
 // ─── AI Loading ───────────────────────────────────────────────────────────────
-function AILoadingScreen({ nav }: { nav: (s: Screen) => void }) {
-  const [step, setStep] = useState(0)
-  const msgs = ['저장한 여행지를 분석하고 있어요...', '이동 거리와 휴식 시간을 계산해요...', '동행자 조건을 반영하고 있어요...', '최적의 일정을 생성하고 있어요...']
-  useEffect(() => {
-    const t = setInterval(() => setStep(s => { if (s >= msgs.length - 1) { clearInterval(t); setTimeout(() => nav('itinerary'), 600); return s }; return s + 1 }), 1200)
-    return () => clearInterval(t)
-  }, [])
+const AI_LOADING_MESSAGES = ['저장한 여행지를 분석하고 있어요...', '이동 거리와 휴식 시간을 계산해요...', '동행자 조건을 반영하고 있어요...', '최적의 일정을 생성하고 있어요...']
+
+// [기능] AI 일정 생성과 일정 재생성에서 동일하게 사용하는 로딩 연출(로봇·회전 링·단계 표시)이다.
+function AILoadingVisual({ step, messages = AI_LOADING_MESSAGES }: { step: number; messages?: string[] }) {
+  const safeStep = Math.min(step, messages.length - 1)
   return (
     <div className="h-full flex flex-col items-center justify-center" style={{ background: 'linear-gradient(160deg,#F0F4FF,#F7F0FF)' }}>
-      <div className="relative w-28 h-28 mb-8">
-        <div className="w-28 h-28 rounded-full border-4 border-[#4169D8]/20 border-t-[#4169D8] animate-spin" />
-        <div className="absolute inset-0 flex items-center justify-center text-4xl">🤖</div>
-      </div>
-      <p className="text-lg font-bold text-gray-900 text-center px-6 mb-3">{msgs[step]}</p>
-      <div className="flex gap-1">{msgs.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${i <= step ? 'bg-[#4169D8] w-6' : 'bg-gray-200 w-3'}`} />)}</div>
+      <div className="relative w-28 h-28 mb-8"><div className="w-28 h-28 rounded-full border-4 border-[#4169D8]/20 border-t-[#4169D8] animate-spin" /><div className="absolute inset-0 flex items-center justify-center text-4xl">🤖</div></div>
+      <p className="text-lg font-bold text-gray-900 text-center px-6 mb-3">{messages[safeStep]}</p>
+      <div className="flex gap-1">{messages.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all ${i <= safeStep ? 'bg-[#4169D8] w-6' : 'bg-gray-200 w-3'}`} />)}</div>
     </div>
   )
 }
 
+// [기능] 여행 조건을 바탕으로 일정 생성 중임을 보여준 뒤 전체 일정 화면으로 이동한다.
+function AILoadingScreen({ nav }: { nav: (s: Screen) => void }) {
+  const [step, setStep] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setStep(current => {
+      if (current >= AI_LOADING_MESSAGES.length - 1) { window.clearInterval(timer); window.setTimeout(() => nav('itinerary'), 600); return current }
+      return current + 1
+    }), 1200)
+    return () => window.clearInterval(timer)
+  }, [nav])
+  return <AILoadingVisual step={step} />
+}
+// [기능] 일반 OpenStreetMap 또는 위성 타일을 선택해 Leaflet 지도에 공급한다.
 function ExploreMapTiles({ style }: { style: 'standard' | 'satellite' }) {
   return style === 'standard'
     ? <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -1323,6 +1368,7 @@ const TRIP_MAP_REGIONS: { name: string; center: [number, number]; zoom: number }
   { name: '춘천', center: [37.8813, 127.7298], zoom: 12 },
 ]
 
+// [기능] 지난 여행의 지역 범위를 지도에 표시하며 일반/위성 지도 전환을 제공한다.
 function PastTripMap({ trip, back }: { trip: Trip; back: () => void }) {
   const [style, setStyle] = useState<'standard' | 'satellite'>('standard')
   const regionText = trip.selectedPlaces.map(place => place.region).join(' ') || trip.title
@@ -1348,12 +1394,45 @@ function PastTripMap({ trip, back }: { trip: Trip; back: () => void }) {
     </section>
   )
 }
+// [기능] 현재 여행의 일차별 장소 번호와 이동 경로를 실제 지도 위에 표시한다.
+function CurrentTripMap({ trip, day, back }: { trip: Trip; day: Trip['days'][number]; back: () => void }) {
+  const [style, setStyle] = useState<'standard' | 'satellite'>('standard')
+  const regionText = trip.selectedPlaces.map(place => place.region).join(' ') || trip.title
+  const region = TRIP_MAP_REGIONS.find(item => regionText.includes(item.name)) ?? TRIP_MAP_REGIONS[0]
+  const offsets: [number, number][] = [[-0.006, -0.009], [-0.001, -0.004], [0.003, -0.001], [0.005, 0.004], [0.001, 0.008]]
+  const points = day.places.map((item, index) => {
+    const offset = offsets[index % offsets.length]
+    return { item, index, position: [region.center[0] + offset[0], region.center[1] + offset[1]] as [number, number] }
+  })
+  return (
+    <section className="flex-shrink-0 bg-white" aria-label="전체 일정 지도">
+      <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+        <button type="button" onClick={back} aria-label="홈으로" className="flex size-[39.6px] shrink-0 items-center justify-center rounded-xl [&>svg]:scale-[0.48] focus-visible:outline-4 focus-visible:outline-[#4169D8]"><LeftIc /></button>
+        <div className="min-w-0 flex-1"><h1 className="truncate text-base font-bold text-gray-900">{trip.title}</h1><p className="text-sm text-gray-500">DAY {day.dayNumber} · {fmtShort(day.date)}</p></div>
+        <div className="flex gap-1 rounded-xl bg-gray-100 p-1" role="group" aria-label="지도 유형">
+          {([{ value: 'standard', label: '일반' }, { value: 'satellite', label: '위성' }] as const).map(option => <button type="button" key={option.value} aria-pressed={style === option.value} onClick={() => setStyle(option.value)} className={`min-h-9 rounded-lg px-2.5 text-xs font-bold ${style === option.value ? 'bg-white text-[#4169D8] shadow-sm' : 'text-gray-600'}`}>{option.label}</button>)}
+        </div>
+      </div>
+      <div className="relative isolate h-52" aria-label="일정 장소와 이동 경로 지도">
+        <MapContainer key={`${trip.id}-${day.dayNumber}-${style}`} center={region.center} zoom={region.zoom} scrollWheelZoom={false} className="h-full w-full" aria-label={`${trip.title} 일정 지도`}>
+          <ExploreMapTiles style={style} />
+          {points.length > 1 && <Polyline positions={points.map(point => point.position)} pathOptions={{ color: '#4169D8', weight: 4, opacity: 0.8 }} />}
+          {points.map(point => <CircleMarker key={`${point.item.time}-${point.item.place}`} center={point.position} radius={11} pathOptions={{ color: '#ffffff', weight: 3, fillColor: point.index === 0 ? '#16A34A' : '#4169D8', fillOpacity: 1 }}><Tooltip permanent direction="center" className="!border-0 !bg-transparent !p-0 !font-bold !text-white !shadow-none">{point.index + 1}</Tooltip><Popup><strong>{point.index + 1}. {point.item.place}</strong><br />{point.item.time} 일정</Popup></CircleMarker>)}
+        </MapContainer>
+        <p className="pointer-events-none absolute left-3 top-3 z-[500] rounded-xl bg-white/95 px-3 py-2 text-xs font-bold text-[#4169D8] shadow-md">번호는 아래 일정 순서와 같아요.</p>
+      </div>
+    </section>
+  )
+}
 // ─── Itinerary ────────────────────────────────────────────────────────────────
-function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
+// [기능] 전체 일정 조회·편집·불편 사유 기반의 더 여유로운 일정 재생성을 담당한다.
+function ItineraryScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const { currentTrip, seniorMode: sm } = state
   const [dayIdx, setDayIdx] = useState(0); const [showAlt, setShowAlt] = useState(false)
   const [editMenu, setEditMenu] = useState<number | null>(null); const [showHard, setShowHard] = useState(false)
   const [hardSel, setHardSel] = useState<string[]>([])
+  const [isRebuilding, setIsRebuilding] = useState(false)
+  const [rebuildStep, setRebuildStep] = useState(0)
   const readOnly = currentTrip.status === 'past'
   const [detail, setDetail] = useState<ScheduleItem | null>(null)
   const detailHeading = useRef<HTMLHeadingElement>(null)
@@ -1362,8 +1441,38 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
     if (detail) detailHeading.current?.focus()
     else detailTrigger.current?.focus()
   }, [detail])
+  useEffect(() => {
+    if (!isRebuilding) { setRebuildStep(0); return }
+    const timer = window.setInterval(() => setRebuildStep(step => Math.min(step + 1, AI_LOADING_MESSAGES.length - 1)), 250)
+    return () => window.clearInterval(timer)
+  }, [isRebuilding])
   const days = currentTrip.days
   const hardOpts = ['🚶 너무 많이 걸어요', '📍 장소가 너무 많아요', '🚗 이동시간이 길어요', '☕ 쉬는 시간 부족해요']
+  const rebuildComfortableSchedule = () => {
+    if (isRebuilding) return
+    setIsRebuilding(true)
+    const reasons = hardSel.length ? hardSel.map(reason => reason.replace(/^[^ ]+ /, '')).join(' · ') : '여유로운 여행'
+    const comfortableDays = currentTrip.days.map(day => {
+      const sightseeing = day.places.filter(item => item.tags.includes('관광')).slice(0, 1)
+      const essentials = day.places.filter(item => !item.tags.includes('관광'))
+      const hasRest = essentials.some(item => item.rest)
+      const restStop: ScheduleItem[] = hasRest ? [] : [{ time: '15:30', place: '카페에서 휴식', icon: '☕', tags: ['휴식'], walk: '', cost: '', rest: true }]
+      return {
+        ...day,
+        places: [...essentials, ...sightseeing, ...restStop].sort((a, b) => a.time.localeCompare(b.time)),
+        notice: `${reasons}을(를) 반영해 하루 방문 장소를 줄이고 휴식 시간을 추가했어요.`,
+      }
+    })
+    // 실제 AI/API 연결 전에도 재생성 과정을 인지할 수 있도록 짧은 로딩 후 새 일정을 적용한다.
+    window.setTimeout(() => {
+      setState(current => ({ ...current, currentTrip: { ...current.currentTrip, days: comfortableDays } }))
+      setDayIdx(0)
+      setShowAlt(false)
+      setShowHard(false)
+      setHardSel([])
+      setIsRebuilding(false)
+    }, 900)
+  }
   if (readOnly && detail) {
     const place = [...currentTrip.selectedPlaces, ...YOUTUBE_SAVED].find(candidate => candidate.name === detail.place)
     return (
@@ -1394,29 +1503,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
   }
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {readOnly ? <PastTripMap trip={currentTrip} back={() => nav('past-trips')} /> : <div className="relative h-44 flex-shrink-0">
-        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=300&fit=crop" alt="지도" className="w-full h-full object-cover opacity-55" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent" />
-        <button onClick={() => nav(readOnly ? 'past-trips' : 'home')} aria-label={readOnly ? '지난 여행 목록으로' : '홈으로'} className="absolute top-12 left-4 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center"><LeftIc /></button>
-        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
-          <div className="bg-white rounded-xl px-3 py-2" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <p className="text-xs text-gray-400">{currentTrip.title}</p>
-            <p className="text-sm font-bold text-gray-900">{fmtShort(currentTrip.startDate)} ~ {fmtShort(currentTrip.endDate)}</p>
-          </div>
-          <div className="bg-white rounded-xl px-3 py-2" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <p className="text-xs text-gray-400">총 이동시간</p>
-            <p className="text-sm font-bold text-gray-900">약 1시간 20분</p>
-          </div>
-        </div>
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
-          {(days[dayIdx]?.places.slice(0, 3) || []).map((p, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <div className="text-xs font-bold text-white bg-[#4169D8] px-2 py-0.5 rounded-full drop-shadow">{p.icon}</div>
-              {i < 2 && <span className="text-white text-xs">→</span>}
-            </div>
-          ))}
-        </div>
-      </div>}
+      {readOnly ? <PastTripMap trip={currentTrip} back={() => nav('past-trips')} /> : <CurrentTripMap trip={currentTrip} day={days[dayIdx]} back={() => nav('home')} />}
       {/* Day tabs */}
       <div className="flex bg-white border-b border-gray-100 flex-shrink-0 overflow-x-auto scrollbar-hide">
         {days.map((d, i) => (
@@ -1488,7 +1575,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
                   className={`text-xs px-3 py-1.5 rounded-full border-2 transition-all ${hardSel.includes(h) ? 'bg-orange-100 border-orange-400 text-orange-700' : 'bg-white border-gray-200 text-gray-600'}`}>{h}</button>
               ))}
             </div>
-            <button onClick={() => { setShowHard(false); setHardSel([]) }} className="w-full py-3 bg-[#4169D8] text-white rounded-xl text-sm font-bold">더 편한 일정으로 다시 만들기</button>
+            <button onClick={rebuildComfortableSchedule} disabled={isRebuilding} className="w-full py-3 bg-[#4169D8] text-white rounded-xl text-sm font-bold disabled:opacity-60">{isRebuilding ? '일정을 다시 만들고 있어요…' : '일정 다시 만들기'}</button>
           </div>
         ) : (
           <>
@@ -1500,6 +1587,7 @@ function ItineraryScreen({ state, nav }: { state: AppState; nav: (s: Screen) => 
           </>
         )}
       </div>
+      {isRebuilding && <div role="status" aria-live="assertive" className="absolute inset-0 z-[1000]"><AILoadingVisual step={rebuildStep} /></div>}
     </div>
   )
 }
@@ -1510,6 +1598,7 @@ const HOTELS = [
   { name: '강릉 세인트존스', dist: '경포해변 인근', price: '120,000원/박', tags: ['조식 포함', '주차'], img: 'photo-1551882547-ff40c63fe5fa', r: 4.5 },
   { name: '아레나 리조트', dist: '강릉역 택시 10분', price: '90,000원/박', tags: ['가성비', '엘리베이터'], img: 'photo-1564501049412-61c2a3083791', r: 4.3 },
 ]
+// [기능] 동행 조건에 맞춘 숙소 후보를 선택하고 출발 전 확인 화면으로 연결한다.
 function AccommodationScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [sel, setSel] = useState(-1); const sm = state.seniorMode
   return (
@@ -1542,6 +1631,7 @@ function AccommodationScreen({ state, nav }: { state: AppState; nav: (s: Screen)
 }
 
 // ─── Pre-Departure ────────────────────────────────────────────────────────────
+// [기능] 출발 전 일정, 숙소, 교통, 동행자, 비용을 최종 확인하는 화면이다.
 function PreDepartureScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const { currentTrip, seniorMode: sm } = state
   const items = [
@@ -1577,6 +1667,7 @@ function PreDepartureScreen({ state, nav }: { state: AppState; nav: (s: Screen) 
 }
 
 // ─── Today Travel ─────────────────────────────────────────────────────────────
+// [기능] 당일 일정의 번호 마커 지도와 일정 상세 바텀시트를 제공하고 장소별 길찾기로 연결한다.
 function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const { currentTrip, seniorMode: sm } = state
   const day = currentTrip.days[1] || currentTrip.days[0]
@@ -1613,6 +1704,7 @@ function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s:
   )
 }
 // ─── Directions ───────────────────────────────────────────────────────────────
+// [기능] 선택한 일정 장소를 목적지로 삼아 이동수단별 길찾기 정보를 표시한다.
 function DirectionsScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const [mode, setMode] = useState('택시')
   const modes = [{ id: '도보', t: '35분', cost: '무료' }, { id: '대중교통', t: '22분', cost: '1,500원' }, { id: '택시', t: '12분', cost: '8,000원' }, { id: '자동차', t: '10분', cost: '주차비 별도' }]
@@ -1639,6 +1731,7 @@ function DirectionsScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
   )
 }
 // ─── Past Trips ───────────────────────────────────────────────────────────────
+// [기능] 완료된 여행 기록을 카드로 보여주고 다시보기 흐름을 제공한다.
 function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const sm = state.seniorMode
   return (
@@ -1677,7 +1770,9 @@ function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: S
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
+// [기능] 여행·날씨·일정 관련 알림을 표시하고 화면 진입 시 읽음 상태를 갱신한다.
 function NotificationsScreen({ notifications, nav, setState }: { notifications: TravelNotification[]; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
+  // [기능] 개별 알림을 읽음으로 변경해 읽지 않은 알림 수를 다시 계산한다.
   function markRead(id: string) {
     setState(previous => {
       if (!previous.notifications.some(item => item.id === id && item.unread)) return previous
@@ -1707,9 +1802,11 @@ function NotificationsScreen({ notifications, nav, setState }: { notifications: 
   )
 }
 // ─── Profile ──────────────────────────────────────────────────────────────────
+// [기능] 사용자 정보, 접근성 설정, 여행 관리 메뉴와 선호 저장 기능을 제공한다.
 function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [editPrefs, setEditPrefs] = useState(false); const [prefs, setPrefs] = useState(state.userPrefs); const sm = state.seniorMode
   const toggle = (p: string) => setPrefs(s => s.includes(p) ? s.filter(x => x !== p) : [...s, p])
+  // [기능] 프로필에서 변경한 사용자 선호값을 앱 전역 상태에 저장한다.
   function savePrefs() { setState(s => ({ ...s, userPrefs: prefs })); setEditPrefs(false) }
   return (
     <div className="flex flex-col h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F0F4FF,#F7F8FF)' }}>
@@ -1815,7 +1912,7 @@ export default function App() {
       case 'trip-companions': return <TripCompanionsScreen state={state} nav={nav} setState={setState} />
       case 'trip-confirm': return <TripConfirmScreen state={state} nav={nav} setState={setState} />
       case 'ai-loading': return <AILoadingScreen nav={nav} />
-      case 'itinerary': return <ItineraryScreen state={state} nav={nav} />
+      case 'itinerary': return <ItineraryScreen state={state} nav={nav} setState={setState} />
       case 'accommodation': return <AccommodationScreen state={state} nav={nav} />
       case 'pre-departure': return <PreDepartureScreen state={state} nav={nav} />
       case 'today-travel': return <TodayTravelScreen state={state} nav={nav} setState={setState} />

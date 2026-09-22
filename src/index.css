@@ -1,3 +1,4 @@
+/* 전역 디자인 토큰, 모바일 터치 보정, 스크롤바 숨김과 공통 카드/시니어 모드 스타일을 정의한다. */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap");
 
 @import "tailwindcss";
