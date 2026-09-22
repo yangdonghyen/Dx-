@@ -278,16 +278,16 @@ function SetupScreen({ onDone }: { onDone: (style: string, prefs: string[], seni
   )
 }
 
-// [기능] 홈의 오늘 날씨 타일에서 여는 날씨 상세 화면이다. 날씨별 계획 1/B/C 일정을 전환해 보여준다.
-// [기능] 현재 날씨를 보여주고, 날씨별 계획 1/B/C를 오늘 일정에 적용한 뒤 오늘의 여행 화면으로 연결한다.
+// [기능] 홈의 오늘 날씨 타일에서 여는 날씨 상세 화면이다. 날씨별 계획 1/2/3 일정을 전환해 보여준다.
+// [기능] 현재 날씨를 보여주고, 날씨별 계획 1/2/3를 오늘 일정에 적용한 뒤 오늘의 여행 화면으로 연결한다.
 function WeatherScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [plan, setPlan] = useState<'A' | 'B' | 'C'>(state.weatherPlan)
   // 현재 날씨 API 연결 전까지는 비 예보 목업을 사용한다. API 응답의 condition/temp/precip 값으로 교체 가능하다.
   const weather = { icon: '🌧️', temp: '19°', label: '비', precip: '70%', humidity: '86%', wind: '3.4m/s', recommended: 'B' as const }
   const plans = {
-    A: { title: 'Plan A · 기본 일정', detail: '안목해변 산책 → 커피거리 → 중앙시장', icon: '🌤️', places: ['안목해변 산책', '강릉 커피거리', '강릉 중앙시장'] },
-    B: { title: 'Plan B · 비 오는 날 일정', detail: '오죽헌 → 강릉시립미술관 → 실내 카페', icon: '🌧️', places: ['오죽헌', '강릉시립미술관', '실내 카페 휴식'] },
-    C: { title: 'Plan C · 더운 날 일정', detail: '이른 해변 산책 → 박물관 → 휴식 카페', icon: '☀️', places: ['이른 안목해변 산책', '강릉 아르떼뮤지엄', '그늘 카페 휴식'] },
+    A: { title: '계획 1 · 기본 일정', detail: '안목해변 산책 → 커피거리 → 중앙시장', icon: '🌤️', places: ['안목해변 산책', '강릉 커피거리', '강릉 중앙시장'] },
+    B: { title: '계획 2 · 비 오는 날 일정', detail: '오죽헌 → 강릉시립미술관 → 실내 카페', icon: '🌧️', places: ['오죽헌', '강릉시립미술관', '실내 카페 휴식'] },
+    C: { title: '계획 3 · 더운 날 일정', detail: '이른 해변 산책 → 박물관 → 휴식 카페', icon: '☀️', places: ['이른 안목해변 산책', '강릉 아르떼뮤지엄', '그늘 카페 휴식'] },
   } as const
   const active = plans[plan]
   const applyPlanAndOpenToday = () => {
@@ -321,85 +321,37 @@ function WeatherScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
     </div>
   )
 }// [기능] 시니어 모드 홈 화면이다. 큰 기능 타일을 두 페이지로 나누고 명확한 이동 경로를 제공한다.
-function HomeModeSwitch({ enabled, onToggle, onNotifications, unread }: { enabled: boolean; onToggle: () => void; onNotifications: () => void; unread: number }) {
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-2 px-5 pt-3">
-      <button type="button" role="switch" aria-checked={enabled} aria-label="시니어 모드" onClick={onToggle}
-        className="flex min-h-11 items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#4169D8]">
-        <span className="text-sm font-bold text-gray-700">시니어 모드</span>
-        <span aria-hidden="true" className={`relative h-7 w-12 rounded-full ${enabled ? 'bg-[#4169D8]' : 'bg-gray-500'}`}>
-          <span className={`absolute top-1 size-5 rounded-full bg-white shadow transition-transform motion-reduce:transition-none ${enabled ? 'translate-x-6' : 'translate-x-1'} left-0`} />
-        </span>
-        <span aria-hidden="true" className="w-7 text-xs font-bold text-gray-700">{enabled ? 'ON' : 'OFF'}</span>
-      </button>
-      <button type="button" onClick={onNotifications} aria-label={unread > 0 ? `알림 열기, 읽지 않은 알림 ${unread}개` : '알림 열기'} className="relative flex size-11 shrink-0 items-center justify-center bg-transparent text-gray-700 focus-visible:outline-2 focus-visible:outline-[#4169D8]">
-        <span aria-hidden="true" className="inline-flex scale-[1.2]"><BellIc /></span>
-        {unread > 0 && <span aria-hidden="true" className="absolute right-2 top-2 size-2 rounded-full bg-red-500" />}
-      </button>
-    </div>
-  )
-}
-function SeniorHomeScreen({ state, nav, onToggleMode }: { state: AppState; nav: (s: Screen) => void; onToggleMode: () => void }) {
-  const [page, setPage] = useState(0)
-  const pages = [
-    [
-      { label: '전체 일정', description: '여행 계획 다시 보기', icon: '📝', to: 'itinerary' as Screen, tone: 'bg-[#4169D8]' },
-      { label: '오늘의 일정', description: '지금 할 일 확인', icon: '📅', to: 'today-travel' as Screen, tone: 'bg-[#E16A3D]' },
-      { label: '여행 만들기', description: '새 여행 계획 시작', icon: '🧳', to: 'trip-places' as Screen, tone: 'bg-[#6B52D3]' },
-      { label: '오늘 날씨', description: '날씨와 일정 확인', icon: '☀️', to: 'weather' as Screen, tone: 'bg-[#F59E0B]' },
-    ],
-    [
-      { label: '지난 여행', description: '추억과 기록 보기', icon: '📷', to: 'past-trips' as Screen, tone: 'bg-[#8B5E3C]' },
-      { label: '저장한 장소', description: `${state.savedPlaces.length}곳 다시 보기`, icon: '❤️', to: 'youtube-saved' as Screen, tone: 'bg-[#D14D72]' },
-      { label: '지도 탐색', description: '내 주변 장소 찾기', icon: '🗺️', to: 'map' as Screen, tone: 'bg-[#0F766E]' },
-      { label: '내 설정', description: '글자와 화면 조절', icon: '⚙️', to: 'profile' as Screen, tone: 'bg-[#475569]' },
-    ],
+function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
+  const menus = [
+    { label: '전체 일정', icon: '📝', to: 'itinerary' as Screen, tone: 'bg-[#4169D8]' },
+    { label: '오늘의 일정', icon: '📅', to: 'today-travel' as Screen, tone: 'bg-[#E16A3D]' },
+    { label: '여행 만들기', icon: '🧳', to: 'trip-places' as Screen, tone: 'bg-[#6B52D3]' },
+    { label: '오늘 날씨', icon: '☀️', to: 'weather' as Screen, tone: 'bg-[#F59E0B]' },
   ]
-  const current = pages[page]
-  const trip = state.currentTrip
   return (
-    <div className="h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F3F7FF 0%,#F9F5FF 46%,#F2FBF8 100%)' }}>
-      <HomeModeSwitch enabled={state.seniorMode} onToggle={onToggleMode} onNotifications={() => nav('notifications')} unread={unreadCount(state.notifications)} />
-      <header className="flex items-center justify-between px-5 pt-2 pb-5">
-        <div><p className="text-base font-bold text-[#4169D8]">여행메이트</p><h1 className="mt-1 text-2xl font-black text-gray-900">안녕하세요, {state.userName}님</h1><p className="mt-1 text-base text-gray-600">어디로 떠나볼까요?</p></div>
-      </header>
-      <main className="px-5 pb-7">
-        <section aria-label="여행지 검색" className="rounded-3xl bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900">어디로 여행 갈까요?</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button onClick={() => nav('search-text')} aria-label="텍스트 검색창 열기" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[#4169D8] bg-[#EEF2FF] text-[#2F4FBF] focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]">
-              <span aria-hidden="true" className="[&>svg]:size-9"><SearchIc /></span><span className="text-base font-bold">직접 입력</span>
-            </button>
-            <button onClick={() => nav('search-voice')} aria-label="음성 검색 시작" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-[#4169D8] text-white focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]">
-              <span aria-hidden="true" className="[&>svg]:size-9"><MicIc /></span><span className="text-base font-bold">말로 찾기</span>
-            </button>
-          </div>
-        </section>
-        <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm" aria-label="주요 기능">
-          <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-black text-gray-900">무엇을 도와드릴까요?</h2><span className="text-sm font-bold text-[#4169D8]">{page + 1} / {pages.length}</span></div>
-          <div className="grid grid-cols-2 gap-4">{current.map(item => <button key={item.label} onClick={() => nav(item.to)} className="flex min-h-40 flex-col items-center justify-center rounded-3xl bg-[#F8FAFF] p-4 text-center active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span></button>)}</div>
-          <div className="mt-5 flex items-center justify-between gap-3"><button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="min-h-12 flex-1 rounded-2xl bg-gray-100 text-base font-bold text-gray-700 disabled:opacity-40">이전</button><div className="flex gap-2" aria-label={`기능 페이지 ${page + 1} / ${pages.length}`}>{pages.map((_, i) => <span key={i} className={`h-2.5 rounded-full transition-all ${page === i ? 'w-7 bg-[#4169D8]' : 'w-2.5 bg-gray-300'}`} />)}</div><button onClick={() => setPage(p => Math.min(pages.length - 1, p + 1))} disabled={page === pages.length - 1} className="min-h-12 flex-1 rounded-2xl bg-[#4169D8] text-base font-bold text-white disabled:opacity-40">다음</button></div>
-        </section>
-
+    <div className="flex h-full flex-col overflow-hidden" style={{ background: 'linear-gradient(160deg,#F3F7FF 0%,#F9F5FF 46%,#F2FBF8 100%)' }}>
+      <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-5"><div><p className="text-base font-bold text-[#4169D8]">여행메이트</p><h1 className="mt-1 text-2xl font-black text-gray-900">안녕하세요, {state.userName}님</h1><p className="mt-1 text-base text-gray-600">어디로 떠나볼까요?</p></div><button type="button" onClick={() => nav('notifications')} aria-label={unreadCount(state.notifications) > 0 ? `알림 ${unreadCount(state.notifications)}개, 눌러서 확인` : '알림 확인'} className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#4169D8]"><BellIc />{unreadCount(state.notifications) > 0 && <span aria-hidden="true" className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />}</button></header>
+      <main className="flex min-h-0 flex-1 flex-col px-5 pb-3">
+        <section aria-label="여행지 검색" className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="text-lg font-bold text-gray-900">어디로 여행 갈까요?</h2><div className="mt-4 grid grid-cols-2 gap-3"><button onClick={() => nav('search-text')} aria-label="텍스트 검색창 열기" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[#4169D8] bg-[#EEF2FF] text-[#2F4FBF] focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]"><span aria-hidden="true" className="[&>svg]:size-9"><SearchIc /></span><span className="text-base font-bold">직접 입력</span></button><button onClick={() => nav('search-voice')} aria-label="음성 검색 시작" className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-[#4169D8] text-white focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#172554]"><span aria-hidden="true" className="[&>svg]:size-9"><MicIc /></span><span className="text-base font-bold">말로 찾기</span></button></div></section>
+        <section className="mt-4 flex min-h-0 flex-1 flex-col rounded-3xl bg-white p-5 shadow-sm" aria-label="주요 기능"><h2 className="mb-4 text-xl font-black text-gray-900">무엇을 도와드릴까요?</h2><div className="grid min-h-0 flex-1 grid-cols-2 gap-4">{menus.map(item => <button key={item.label} onClick={() => nav(item.to)} className="flex min-h-0 flex-col items-center justify-center rounded-3xl bg-[#F8FAFF] p-4 text-center active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span></button>)}</div></section>
       </main>
     </div>
   )
 }
 // ─── Home ─────────────────────────────────────────────────────────────────────
 // [기능] 일반 모드 홈 화면이다. 여행 생성, 예정 여행, 저장 장소 및 지난 여행 진입점을 구성한다.
-function HomeScreen({ state, nav, onToggleMode }: { state: AppState; nav: (s: Screen) => void; onToggleMode: () => void }) {
+function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
   const { userName, currentTrip, savedPlaces, seniorMode: sm } = state
   const notifs = unreadCount(state.notifications)
   const until = daysUntil(currentTrip.startDate)
   const ongoing = until <= 0
   const tl = sm ? 'text-xl' : 'text-lg'
   const ts = sm ? 'text-base' : 'text-sm'
-  if (sm) return <SeniorHomeScreen state={state} nav={nav} onToggleMode={onToggleMode} />
+  if (sm) return <SeniorHomeScreen state={state} nav={nav} />
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F0F4FF 0%,#F7F0FF 30%,#F0FAFF 70%,#F7F8FF 100%)' }}>
       {/* Header */}
-      <HomeModeSwitch enabled={sm} onToggle={onToggleMode} onNotifications={() => nav('notifications')} unread={notifs} />
       <div className="px-5 pt-2 pb-2 flex items-center justify-between flex-shrink-0">
         <div>
           <p className="text-xs text-gray-400 font-medium">여행메이트 ✈️</p>
@@ -740,7 +692,7 @@ function YouTubeSavedScreen({ state, nav, setState }: { state: AppState; nav: (s
           <YtIc /> AI로 내 여행 취향 분석하기
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
+            <div className="px-5 mb-3 flex-shrink-0"><button onClick={() => nav('past-trips')} className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-bold text-[#8B5E3C] shadow-sm">📷 지난 여행 보기</button></div><div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
         <div className="grid grid-cols-2 gap-3">
           {state.savedPlaces.map(p => (
             <button key={p.id} onClick={() => { setState(s => ({ ...s, selectedPlace: p })); nav('place-detail') }}
@@ -1765,7 +1717,7 @@ function PreDepartureScreen({ state, nav }: { state: AppState; nav: (s: Screen) 
 // [기능] 당일 일정의 지도·장소 상세·길찾기와, 동선에서 벗어나지 않는 휴식 장소 추가를 제공한다.
 function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const { currentTrip, seniorMode: sm } = state
-  // 날씨 플랜별 화면 효과: Plan B에서만 비 애니메이션을 보여준다.
+  // 날씨 플랜별 화면 효과: 계획 2에서만 비 애니메이션을 보여준다.
   const currentWeather: 'none' | 'rain' = state.weatherPlan === 'B' ? 'rain' : 'none'
   const day = currentTrip.days[1] || currentTrip.days[0]
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleItem | null>(null)
@@ -1975,10 +1927,10 @@ function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
         <section className="rounded-3xl bg-white p-5 shadow-sm"><div className="flex items-center gap-4"><div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-3xl bg-[#4169D8] text-3xl font-black text-white">{state.userName[0]}</div><div><p className={`font-black text-gray-900 ${sm ? 'text-2xl' : 'text-xl'}`}>{state.userName}님</p></div></div><div className="mt-5 grid grid-cols-3 divide-x divide-gray-100 rounded-2xl bg-[#F8FAFF] py-3 text-center"><div><p className="text-xs text-gray-500">지난 여행</p><p className="mt-1 text-lg font-black text-gray-900">{PAST_TRIPS.length}회</p></div><div><p className="text-xs text-gray-500">저장 장소</p><p className="mt-1 text-lg font-black text-gray-900">{state.savedPlaces.length}곳</p></div><div><p className="text-xs text-gray-500">여행 취향</p><p className="mt-1 text-lg font-black text-gray-900">{state.userPrefs.length}개</p></div></div></section>
         <section aria-label="마이페이지 메뉴" className="rounded-3xl bg-white p-5 shadow-sm">
           <div className="grid grid-cols-2 gap-4">
-            {travelMenus.map(card => <button key={card.label} onClick={() => nav(card.to)} className="h-36 rounded-3xl bg-white p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-sm ${card.tone}`}>{card.icon}</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>{card.label}</span><span className="mt-1 block text-sm leading-5 text-gray-600">{card.desc}</span></button>)}
-            <button onClick={() => setEditPrefs(editing => !editing)} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${editPrefs ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#D14D72] text-2xl shadow-sm">❤️</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>여행 취향</span><span className="mt-1 block text-sm leading-5 text-gray-600">{editPrefs ? '취향을 선택 중이에요' : `${state.userPrefs.length}개 설정됨`}</span></button>
-            <button onClick={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${sm ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F766E] text-2xl shadow-sm">🔎</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>시니어 모드</span><span className="mt-1 block text-sm leading-5 text-gray-600">{sm ? '큰 글씨로 사용 중' : '기본 화면 사용 중'}</span></button>
-            <button onClick={() => nav('ai-analysis')} className="h-36 rounded-3xl bg-[#F4F1FF] p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#6B52D3] text-2xl shadow-sm">🤖</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>AI 취향 재분석</span><span className="mt-1 block text-sm leading-5 text-gray-600">최근 저장한 장소를 바탕으로 다시 분석해요.</span></button>
+            {travelMenus.map(card => <button key={card.label} onClick={() => nav(card.to)} className="h-36 rounded-3xl bg-white p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-sm ${card.tone}`}>{card.icon}</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>{card.label}</span></button>)}
+            <button onClick={() => setEditPrefs(editing => !editing)} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${editPrefs ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#D14D72] text-2xl shadow-sm">❤️</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>여행 취향</span></button>
+            <button onClick={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} className={`h-36 rounded-3xl p-4 text-left shadow-sm active:scale-[0.98] transition-transform ${sm ? 'bg-[#EEF2FF] ring-2 ring-[#4169D8]' : 'bg-white'}`}><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0F766E] text-2xl shadow-sm">🔎</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>시니어 모드</span></button>
+            <button onClick={() => nav('ai-analysis')} className="h-36 rounded-3xl bg-[#F4F1FF] p-4 text-left shadow-sm active:scale-[0.98] transition-transform"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#6B52D3] text-2xl shadow-sm">🤖</span><span className={`mt-3 block font-black text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>AI 취향 재분석</span></button>
           </div>
           {editPrefs && <div className="mt-4 rounded-3xl bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h3 className="font-black text-gray-900">좋아하는 여행 스타일</h3><button onClick={() => setEditPrefs(false)} className="text-sm font-bold text-gray-500">닫기</button></div><div className="mt-4 flex flex-wrap gap-2">{ALL_PREFS.map(pref => <button key={pref} onClick={() => toggle(pref)} className={`rounded-full border-2 px-3 py-2 text-sm font-semibold ${prefs.includes(pref) ? 'border-[#4169D8] bg-[#4169D8] text-white' : 'border-gray-200 bg-white text-gray-600'}`}>{PREFS_E[pref]} {pref}</button>)}</div><button onClick={savePrefs} className="mt-4 min-h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">여행 취향 저장하기</button></div>}
         </section>
@@ -2027,7 +1979,7 @@ export default function App() {
       case 'login': return <LoginScreen onLogin={() => nav('setup')} onRegister={() => nav('register')} />
       case 'register': return <RegisterScreen onDone={() => nav('setup')} />
       case 'setup': return <SetupScreen onDone={(style, prefs, senior) => { setState(s => ({ ...s, travelStyle: style, userPrefs: prefs, seniorMode: senior })); nav('home') }} />
-      case 'home': return <HomeScreen state={state} nav={nav} onToggleMode={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} />
+      case 'home': return <HomeScreen state={state} nav={nav} />
       case 'search-text':
       case 'search-voice': return <PlaceSearchScreen startVoiceRef={startVoiceRef} key={state.screen} voice={state.screen === 'search-voice'} nav={nav} onSelect={place => { setState(s => ({ ...s, selectedPlace: place })); nav('place-detail') }} />
       case 'camera': return <CameraScreen nav={nav} />
@@ -2057,7 +2009,7 @@ export default function App() {
       case 'past-trips': return <PastTripsScreen state={state} nav={nav} setState={setState} />
       case 'notifications': return <NotificationsScreen notifications={state.notifications} nav={nav} setState={setState} />
       case 'profile': return <ProfileScreen state={state} nav={nav} setState={setState} />
-      default: return <HomeScreen state={state} nav={nav} onToggleMode={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} />
+      default: return <HomeScreen state={state} nav={nav} />
     }
   })()
 
