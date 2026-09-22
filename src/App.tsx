@@ -112,7 +112,6 @@ const PlusIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 const MinusIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
 const NavIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
 const SearchIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-const MoreIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-300"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
 const CheckIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5"><polyline points="20 6 9 17 4 12"/></svg>
 const YtIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 00-1.95 1.96A29 29 0 001 12a29 29 0 00.46 5.58a2.78 2.78 0 001.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 001.95-1.95A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon fill="white" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
 
@@ -1532,11 +1531,11 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
                       if (readOnly) { detailTrigger.current = event.currentTarget; setDetail(item) }
                       else setEditMenu(editMenu === i ? null : i)
                     }}
-                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-[#4169D8] focus-visible:outline-4 focus-visible:outline-[#4169D8]">{readOnly ? '상세' : <MoreIc />}</button>
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-[#4169D8] focus-visible:outline-4 focus-visible:outline-[#4169D8]">{readOnly ? '상세' : '수정'}</button>
                 </div>
                 {!readOnly && editMenu === i && (
                   <div className="mt-2 bg-gray-50 rounded-xl overflow-hidden">
-                    {['장소 바꾸기', '순서 변경', '시간 변경', '삭제'].map(opt => (
+                    {['장소 바꾸기', '순서 변경', '삭제'].map(opt => (
                       <button key={opt} onClick={() => setEditMenu(null)}
                         className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 ${opt === '삭제' ? 'text-red-500' : 'text-gray-700'}`}>{opt}</button>
                     ))}
