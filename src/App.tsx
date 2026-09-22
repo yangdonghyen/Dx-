@@ -377,7 +377,7 @@ function SeniorHomeScreen({ state, nav, onToggleMode }: { state: AppState; nav: 
         </section>
         <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm" aria-label="주요 기능">
           <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-black text-gray-900">무엇을 도와드릴까요?</h2><span className="text-sm font-bold text-[#4169D8]">{page + 1} / {pages.length}</span></div>
-          <div className="grid grid-cols-2 gap-4">{current.map(item => <button key={item.label} onClick={() => nav(item.to)} className="min-h-40 rounded-3xl bg-[#F8FAFF] p-4 text-left active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span><span className="mt-1 block text-sm leading-5 text-gray-600">{item.description}</span></button>)}</div>
+          <div className="grid grid-cols-2 gap-4">{current.map(item => <button key={item.label} onClick={() => nav(item.to)} className="flex min-h-40 flex-col items-center justify-center rounded-3xl bg-[#F8FAFF] p-4 text-center active:scale-[0.98] transition-transform"><span aria-hidden="true" className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl shadow-sm ${item.tone}`}>{item.icon}</span><span className="mt-3 block text-lg font-black text-gray-900">{item.label}</span></button>)}</div>
           <div className="mt-5 flex items-center justify-between gap-3"><button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="min-h-12 flex-1 rounded-2xl bg-gray-100 text-base font-bold text-gray-700 disabled:opacity-40">이전</button><div className="flex gap-2" aria-label={`기능 페이지 ${page + 1} / ${pages.length}`}>{pages.map((_, i) => <span key={i} className={`h-2.5 rounded-full transition-all ${page === i ? 'w-7 bg-[#4169D8]' : 'w-2.5 bg-gray-300'}`} />)}</div><button onClick={() => setPage(p => Math.min(pages.length - 1, p + 1))} disabled={page === pages.length - 1} className="min-h-12 flex-1 rounded-2xl bg-[#4169D8] text-base font-bold text-white disabled:opacity-40">다음</button></div>
         </section>
 
@@ -1828,7 +1828,7 @@ function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s:
   ) : null
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-white">
-      <div className="relative z-[2] flex-shrink-0 border-b border-gray-100 bg-white px-5 pt-12 pb-3 flex items-center justify-between"><button onClick={() => nav('home')} aria-label="홈으로 돌아가기"><LeftIc /></button><div className="relative z-[1] text-center"><h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1><p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p></div><div className="w-8" /></div>
+      <div className="relative z-[2] flex-shrink-0 border-b border-gray-100 bg-white px-5 pt-4 pb-3 flex items-center justify-between"><button onClick={() => nav('home')} aria-label="홈으로 돌아가기"><LeftIc /></button><div className="relative z-[1] text-center"><h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1><p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p></div><div className="w-8" /></div>
       
       {currentWeather === 'rain' && !selectedSchedule && <div className="weather-travel-rain" aria-hidden="true">{Array.from({ length: 36 }, (_, index) => <span key={index} className="weather-rain-drop" style={{ left: `${1 + ((index * 19) % 98)}%`, animationDelay: `${(index % 9) * -0.18}s`, animationDuration: `${0.9 + (index % 4) * 0.13}s` }} />)}<span className="weather-rain-mist" /></div>}
       
@@ -1987,7 +1987,7 @@ function ProfileScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
   )
 }
 // ─── App ──────────────────────────────────────────────────────────────────────
-const NAV_SCREENS: Screen[] = ['home', 'map', 'youtube-saved', 'profile', 'past-trips', 'notifications', 'itinerary']
+const NAV_SCREENS: Screen[] = ['home', 'map', 'youtube-saved', 'profile', 'past-trips', 'notifications', 'itinerary', 'today-travel']
 const NO_NAV: Screen[] = ['login', 'register', 'setup', 'analyzing', 'ai-loading', 'camera']
 
 export default function App() {
@@ -2071,7 +2071,7 @@ export default function App() {
         </div>
         <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">{screenEl}</div>
         {showRainAlert && <button type="button" onClick={openRainPlan} className="absolute inset-x-4 top-16 z-[2000] rounded-2xl border border-[#4169D8]/20 bg-white p-4 text-left shadow-lg" aria-label="비 예보 알림. 눌러서 비 오는 날 일정 계획 2 확인"><div className="flex items-start gap-3"><span className="text-3xl">🌧️</span><div className="min-w-0 flex-1"><p className="text-sm font-black text-[#4169D8]">날씨 알림</p><p className="mt-1 text-base font-bold text-gray-900">강릉 지역에 비가 올 예정이에요.</p><p className="mt-1 text-sm leading-5 text-gray-600">강수확률 70% · 실내 중심 계획 2를 확인해보세요.</p><p className="mt-2 text-xs font-bold text-[#4169D8]">눌러서 오늘 일정 확인하기</p></div></div></button>}
-        {showNav && <BottomNav active={state.screen} nav={nav} sm={sm} notifs={unreadCount(state.notifications)} />}
+        {showNav && <BottomNav active={state.screen === 'today-travel' ? 'home' : state.screen} nav={nav} sm={sm} notifs={unreadCount(state.notifications)} />}
       </div>
     </div>
   )
