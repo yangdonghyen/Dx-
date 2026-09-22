@@ -111,6 +111,7 @@ const XIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const PlusIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 const MinusIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
 const NavIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+const RestIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true"><path d="M6 5v9"/><path d="M8 6h2v7H8z"/><path d="M8 13h11v2H8z"/><path d="M10 15 8 19"/><path d="M17 15l2 4"/><path d="M5 19h16"/></svg>
 const SearchIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
 const MoreIc = () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-300"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
 const CheckIc = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1665,11 +1666,20 @@ function PreDepartureScreen({ state, nav }: { state: AppState; nav: (s: Screen) 
 
 // ─── Today Travel ─────────────────────────────────────────────────────────────
 // [기능] 당일 일정의 번호 마커 지도와 일정 상세 바텀시트를 제공하고 장소별 길찾기로 연결한다.
+// [기능] 당일 일정의 지도·장소 상세·길찾기와, 동선에서 벗어나지 않는 휴식 장소 추가를 제공한다.
 function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const { currentTrip, seniorMode: sm } = state
   const day = currentTrip.days[1] || currentTrip.days[0]
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleItem | null>(null)
+  const [restMode, setRestMode] = useState(false)
+  const [restTarget, setRestTarget] = useState<ScheduleItem | null>(null)
+  const [isSearchingRest, setIsSearchingRest] = useState(false)
+  const [restSearchComplete, setRestSearchComplete] = useState(false)
   const schedule = day?.places || []
+  const restSpots = [
+    { name: '안목 해변 쉼터', icon: '🪑', time: '현재 위치에서 4분', features: ['앉아서 쉴 수 있음', '화장실 있음', '그늘 있음', '카페 있음'] },
+    { name: '경포호 작은 공원', icon: '🌳', time: '현재 위치에서 6분', features: ['벤치 있음', '화장실 있음', '그늘 있음', '산책로 있음'] },
+  ]
   const itineraryCenter: [number, number] = [37.7519, 128.8761]
   const routeOffsets: [number, number][] = [[-0.006, -0.009], [-0.001, -0.004], [0.003, -0.001], [0.005, 0.004], [0.001, 0.008]]
   const openDirections = (item: ScheduleItem | undefined) => { if (item) setState(current => ({ ...current, activeSchedule: item })); nav('directions') }
@@ -1677,25 +1687,66 @@ function TodayTravelScreen({ state, nav, setState }: { state: AppState; nav: (s:
     const [latOffset, lngOffset] = routeOffsets[index % routeOffsets.length]
     return { item, index, position: [itineraryCenter[0] + latOffset, itineraryCenter[1] + lngOffset] as [number, number] }
   })
+  const pickRestTarget = (item: ScheduleItem) => { setRestTarget(item); setRestSearchComplete(false); setSelectedSchedule(null) }
+  const toggleRestMode = () => { setRestMode(mode => !mode); setRestTarget(null); setRestSearchComplete(false); setIsSearchingRest(false); setSelectedSchedule(null) }
+  const shiftTime = (time: string, minutesToAdd: number) => {
+    const [hours, minutes] = time.split(':').map(Number)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return time
+    const total = hours * 60 + minutes + minutesToAdd
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  }
+  const addRestStop = (spot: typeof restSpots[number]) => {
+    if (!restTarget || !day) return
+    setState(current => {
+      const dayIndex = current.currentTrip.days.findIndex(item => item.dayNumber === day.dayNumber)
+      if (dayIndex < 0) return current
+      const targetIndex = current.currentTrip.days[dayIndex].places.findIndex(item => item.time === restTarget.time && item.place === restTarget.place)
+      if (targetIndex < 0) return current
+      const restStop: ScheduleItem = { time: restTarget.time, place: spot.name, icon: spot.icon, tags: ['AI 추천', '휴식'], walk: spot.time, cost: '무료', rest: true }
+      const updatedDay = {
+        ...current.currentTrip.days[dayIndex],
+        places: [
+          ...current.currentTrip.days[dayIndex].places.slice(0, targetIndex + 1),
+          { ...restStop, time: shiftTime(restTarget.time, 30) },
+          ...current.currentTrip.days[dayIndex].places.slice(targetIndex + 1).map(item => ({ ...item, time: shiftTime(item.time, 30) })),
+        ],
+        notice: '선택한 일정 다음에 AI 추천 휴식 장소를 추가하고, 이후 일정을 30분씩 여유롭게 조정했어요.',
+      }
+      const days = current.currentTrip.days.map((item, index) => index === dayIndex ? updatedDay : item)
+      return { ...current, currentTrip: { ...current.currentTrip, days } }
+    })
+    setRestMode(false)
+    setRestTarget(null)
+    setRestSearchComplete(false)
+  }
+  // 선택한 일정 아래에만 표시되는 휴식 장소 탐색·추천·삽입 패널이다.
+  const restRecommendationPanel = restMode && restTarget ? (
+    <section className="mt-2 rounded-3xl bg-[#EEF2FF] p-4 shadow-sm">
+      <p className="text-sm font-black text-[#4169D8]">🤖 AI 휴식 장소 추천</p>
+      <p className="mt-2 text-sm leading-6 text-gray-700"><b>{restTarget.place}</b> 다음 동선을 기준으로, 길에서 크게 벗어나지 않는 휴식 장소를 찾아드릴게요.</p>
+      {!isSearchingRest && !restSearchComplete && <button onClick={() => { setIsSearchingRest(true); window.setTimeout(() => { setIsSearchingRest(false); setRestSearchComplete(true) }, 900) }} className="mt-4 h-12 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">휴식 장소 탐색하기</button>}
+      {isSearchingRest && <div role="status" className="mt-4 rounded-2xl bg-white p-5 text-center"><div className="mx-auto h-8 w-8 rounded-full border-4 border-[#4169D8]/20 border-t-[#4169D8] animate-spin" /><p className="mt-3 text-sm font-bold text-gray-700">주변 쉼터와 공원을 찾고 있어요…</p></div>}
+      {restSearchComplete && <div className="mt-4 space-y-3">{restSpots.map(spot => <div key={spot.name} className="rounded-2xl bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-gray-900">{spot.icon} {spot.name}</p><p className="mt-1 text-sm font-semibold text-[#4169D8]">{spot.time}</p></div><span className="rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">동선 이탈 적음</span></div><div className="mt-3 flex flex-wrap gap-2">{spot.features.map(feature => <span key={feature} className="rounded-full bg-[#F0F4FF] px-3 py-1.5 text-xs font-semibold text-[#4169D8]">✓ {feature}</span>)}</div><button onClick={() => addRestStop(spot)} className="mt-4 h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">이곳에서 휴식하기</button></div>)}</div>}
+    </section>
+  ) : null
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-white">
-      <div className="flex-shrink-0 border-b border-gray-100 px-5 pt-12 pb-3 flex items-center justify-between">
-        <button onClick={() => nav('home')} aria-label="홈으로 돌아가기"><LeftIc /></button>
-        <div className="text-center"><h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1><p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p></div>
-        <div className="w-8" />
-      </div>
+      <div className="flex-shrink-0 border-b border-gray-100 px-5 pt-12 pb-3 flex items-center justify-between"><button onClick={() => nav('home')} aria-label="홈으로 돌아가기"><LeftIc /></button><div className="text-center"><h1 className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>오늘의 여행</h1><p className="text-xs text-gray-400">DAY {day?.dayNumber} · {day ? fmtDate(day.date) : ''}</p></div><div className="w-8" /></div>
       <div className="relative h-48 flex-shrink-0 bg-blue-50" aria-label="오늘 일정 경로 지도">
-        <MapContainer center={itineraryCenter} zoom={13} scrollWheelZoom className="h-full w-full" aria-label="오늘 여행 일정 지도">
-          <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {itineraryPoints.length > 1 && <Polyline positions={itineraryPoints.map(point => point.position)} pathOptions={{ color: '#4169D8', weight: 4, opacity: 0.8 }} />}
-          {itineraryPoints.map(point => <CircleMarker key={`${point.item.time}-${point.item.place}`} center={point.position} radius={11} pathOptions={{ color: '#ffffff', weight: 3, fillColor: point.index === 0 ? '#16A34A' : '#4169D8', fillOpacity: 1 }} eventHandlers={{ click: () => setSelectedSchedule(point.item) }}><Tooltip permanent direction="center" className="!border-0 !bg-transparent !p-0 !font-bold !text-white !shadow-none">{point.index + 1}</Tooltip><Popup><strong>{point.item.time} · {point.item.place}</strong><br />지도를 눌러 상세 정보를 확인하세요.</Popup></CircleMarker>)}
-        </MapContainer>
-        <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-xl bg-white/95 px-3 py-2 shadow-md"><p className="text-xs font-bold text-[#4169D8]">오늘의 이동 경로</p><p className="mt-0.5 text-xs text-gray-600">지도 번호와 아래 일정 번호가 같아요.</p></div>
+        <MapContainer center={itineraryCenter} zoom={13} scrollWheelZoom className="h-full w-full" aria-label="오늘 여행 일정 지도"><TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />{itineraryPoints.length > 1 && <Polyline positions={itineraryPoints.map(point => point.position)} pathOptions={{ color: restMode ? '#9CA3AF' : '#4169D8', weight: 4, opacity: 0.8 }} />}{itineraryPoints.map(point => <CircleMarker key={`${point.item.time}-${point.item.place}`} center={point.position} radius={11} pathOptions={{ color: '#ffffff', weight: 3, fillColor: restMode ? '#9CA3AF' : point.index === 0 ? '#16A34A' : '#4169D8', fillOpacity: 1 }} eventHandlers={{ click: () => restMode ? pickRestTarget(point.item) : setSelectedSchedule(point.item) }}><Tooltip permanent direction="center" className="!border-0 !bg-transparent !p-0 !font-bold !text-white !shadow-none">{point.index + 1}</Tooltip><Popup><strong>{point.item.time} · {point.item.place}</strong><br />{restMode ? '휴식 전 장소로 선택할 수 있어요.' : '지도를 눌러 상세 정보를 확인하세요.'}</Popup></CircleMarker>)}</MapContainer>
+        <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-xl bg-white/95 px-3 py-2 shadow-md"><p className={`text-xs font-bold ${restMode ? 'text-gray-500' : 'text-[#4169D8]'}`}>{restMode ? '휴식할 다음 일정을 골라주세요' : '오늘의 이동 경로'}</p><p className="mt-0.5 text-xs text-gray-600">지도 번호와 아래 일정 번호가 같아요.</p></div>
       </div>
-      <div className="flex-shrink-0 bg-[#F0F4FF] px-5 py-3"><p className="mb-1 text-xs text-gray-500">현재 일정</p><div className="flex items-center justify-between gap-3"><div><p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>{schedule[0]?.icon} {schedule[0]?.place}</p><p className="text-sm text-gray-500">{schedule[0]?.time}</p></div><button onClick={() => openDirections(schedule[0])} className="flex h-10 flex-shrink-0 items-center gap-1 rounded-xl bg-[#4169D8] px-4 text-sm font-semibold text-white"><NavIc /> 길찾기</button></div></div>
+      <div className="flex-shrink-0 bg-[#F0F4FF] px-5 py-3"><p className="mb-1 text-xs text-gray-500">현재 일정</p><div className="flex items-center justify-between gap-3"><div><p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>{schedule[0]?.icon} {schedule[0]?.place}</p><p className="text-sm text-gray-500">{schedule[0]?.time}</p></div><div className="flex gap-2"><button onClick={toggleRestMode} className={`flex h-10 items-center gap-1 rounded-xl px-3 text-sm font-semibold ${restMode ? 'bg-gray-600 text-white' : 'bg-white text-[#4169D8] border border-[#4169D8]/20'}`}><RestIc /> {restMode ? '휴식 취소' : '휴식하기'}</button><button onClick={() => openDirections(schedule[0])} className="flex h-10 items-center gap-1 rounded-xl bg-[#4169D8] px-3 text-sm font-semibold text-white"><NavIc /> 길찾기</button></div></div></div>
       <div className="flex-1 min-h-0 space-y-2 overflow-y-auto px-5 py-3 scrollbar-hide">
-        {schedule.map((item, index) => <button key={`${item.time}-${item.place}`} onClick={() => setSelectedSchedule(item)} aria-label={`${item.place} 일정 자세히 보기`} className={`w-full rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.98] ${index === 1 ? 'border-[#4169D8] bg-[#EEF2FF]' : index === 0 ? 'border-green-300 bg-green-50' : 'border-transparent bg-white shadow-sm'}`}><div className="flex items-center gap-3"><span aria-hidden="true" className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${index === 0 ? 'bg-green-500' : 'bg-[#4169D8]'}`}>{index + 1}</span><span aria-hidden="true" className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm ${sm ? 'text-4xl' : ''}`}>{item.icon}</span><div className="min-w-0 flex-1"><p className="text-sm text-gray-500">{item.time}</p><p className={`truncate font-bold text-gray-900 ${sm ? 'text-lg' : 'text-base'}`}>{item.place}</p><p className="mt-1 truncate text-xs text-gray-500">{item.transport ? `🚕 ${item.transport}` : ''}{item.transport && item.walk ? ' · ' : ''}{item.walk ? `🚶 ${item.walk}` : '자세히 보기'}</p></div><span className="flex-shrink-0 text-xs font-bold text-[#4169D8]">상세</span></div></button>)}
-      </div>
+        {restMode && !restTarget && <p className="rounded-2xl bg-gray-100 px-4 py-3 text-sm font-bold text-gray-600">휴식하고 싶은 일정 카드를 눌러주세요.</p>}
+        {schedule.map((item, index) => (
+          <div key={`${item.time}-${item.place}`}>
+            <button onClick={() => restMode ? pickRestTarget(item) : setSelectedSchedule(item)} aria-label={restMode ? `${item.place} 다음에 휴식 장소 찾기` : `${item.place} 일정 자세히 보기`} className={`w-full rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.98] ${restMode ? (restTarget?.time === item.time && restTarget.place === item.place ? 'border-gray-500 bg-gray-200' : 'border-transparent bg-gray-100') : index === 1 ? 'border-[#4169D8] bg-[#EEF2FF]' : index === 0 ? 'border-green-300 bg-green-50' : 'border-transparent bg-white shadow-sm'}`}>
+              <div className="flex items-center gap-3"><span aria-hidden="true" className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${restMode ? 'bg-gray-400' : index === 0 ? 'bg-green-500' : 'bg-[#4169D8]'}`}>{index + 1}</span><span aria-hidden="true" className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm ${restMode ? 'grayscale opacity-60' : ''} ${sm ? 'text-4xl' : ''}`}>{item.icon}</span><div className="min-w-0 flex-1"><p className={`text-sm ${restMode ? 'text-gray-400' : 'text-gray-500'}`}>{item.time}</p><p className={`truncate font-bold ${restMode ? 'text-gray-500' : 'text-gray-900'} ${sm ? 'text-lg' : 'text-base'}`}>{item.place}</p><p className={`mt-1 truncate text-xs ${restMode ? 'text-gray-400' : 'text-gray-500'}`}>{restMode ? '다음에 휴식 장소 추가하기' : item.transport ? `🚕 ${item.transport}` : item.walk ? `🚶 ${item.walk}` : '자세히 보기'}</p></div><span className={`flex-shrink-0 text-xs font-bold ${restMode ? 'text-gray-500' : 'text-[#4169D8]'}`}>{restMode ? '선택' : '상세'}</span></div>
+            </button>
+            {restMode && restTarget?.time === item.time && restTarget.place === item.place && restRecommendationPanel}
+          </div>
+        ))}      </div>
       {selectedSchedule && <div className="absolute inset-0 z-50 flex items-end bg-black/50" onClick={() => setSelectedSchedule(null)}><section role="dialog" aria-modal="true" aria-labelledby="schedule-detail-title" className="max-h-[82%] w-full overflow-y-auto rounded-t-3xl bg-white px-5 pt-3 pb-6 shadow-2xl" onClick={event => event.stopPropagation()}><div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-200" /><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#4169D8]">{selectedSchedule.time} 일정</p><h2 id="schedule-detail-title" className="mt-1 text-2xl font-black text-gray-900">{selectedSchedule.icon} {selectedSchedule.place}</h2></div><button onClick={() => setSelectedSchedule(null)} aria-label="일정 상세 닫기" className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-xl text-gray-700">×</button></div><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-[#F7F9FF] p-3"><p className="text-xs text-gray-500">이동</p><p className="mt-1 text-base font-bold text-gray-900">{selectedSchedule.transport || selectedSchedule.walk || '이동 정보 없음'}</p></div><div className="rounded-2xl bg-[#F7F9FF] p-3"><p className="text-xs text-gray-500">예상 비용</p><p className="mt-1 text-base font-bold text-gray-900">{selectedSchedule.cost || '무료'}</p></div></div><div className="mt-4"><p className="text-sm font-bold text-gray-900">이 일정의 특징</p><div className="mt-2 flex flex-wrap gap-2">{selectedSchedule.tags.map(tag => <span key={tag} className="rounded-full bg-[#EEF2FF] px-3 py-1.5 text-sm font-semibold text-[#2749A5]">{tag}</span>)}</div></div>{selectedSchedule.rest && <p className="mt-4 rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700">휴식하기 좋은 일정이에요.</p>}<button onClick={() => openDirections(selectedSchedule)} className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#4169D8] text-base font-bold text-white"><NavIc /> 해당 장소 길찾기</button></section></div>}
     </div>
   )
@@ -1708,6 +1759,10 @@ function DirectionsScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
   const selectedMode = modes.find(item => item.id === mode)!
   const day = state.currentTrip.days[1] || state.currentTrip.days[0]
   const schedule = day?.places || []
+  const restSpots = [
+    { name: '안목 해변 쉼터', icon: '🪑', time: '현재 위치에서 4분', features: ['앉아서 쉴 수 있음', '화장실 있음', '그늘 있음', '카페 있음'] },
+    { name: '경포호 작은 공원', icon: '🌳', time: '현재 위치에서 6분', features: ['벤치 있음', '화장실 있음', '그늘 있음', '산책로 있음'] },
+  ]
   const destination = state.activeSchedule || schedule[1] || schedule[0]
   const destinationIndex = Math.max(0, schedule.findIndex(item => item.time === destination?.time && item.place === destination?.place))
   const center: [number, number] = [37.7519, 128.8761]
