@@ -1,3 +1,4 @@
+import { rebuildComfortPlan, COMFORT_OPTIONS, type ComfortReason } from './lib/comfort'
 /**
  * 여행메이트 단일 페이지 애플리케이션.
  * 로그인부터 여행 생성, 지도 탐색, 일정 확인, 길찾기, 지난 여행 관리까지의 화면 전환과
@@ -26,7 +27,7 @@ interface Companion { name: string; age: string; prefs: string[]; walking: strin
 interface Trip {
   id: string; title: string; startDate: string; endDate: string
   travelers: number; transport: string[]; budget: string
-  companions: Companion[]; hotel: string; days: DayPlan[]; status: 'upcoming' | 'ongoing' | 'past'
+  companions: Companion[]; hotel: string; days: DayPlan[]; originalDays?: DayPlan[]; status: 'upcoming' | 'ongoing' | 'past'
   selectedPlaces: Place[]
 }
 
@@ -1421,12 +1422,50 @@ function CurrentTripMap({ trip, day, back }: { trip: Trip; day: Trip['days'][num
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 // [기능] 전체 일정 조회·편집·불편 사유 기반의 더 여유로운 일정 재생성을 담당한다.
 // pastTrip이 전달되면 전역 현재 여행을 변경하지 않고, 지난 여행을 읽기 전용으로 표시한다.
+function ItineraryDaySelector({ days, selected, onSelect, senior }: { days: DayPlan[]; selected: number; onSelect: (index: number) => void; senior: boolean }) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const activeButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const container = scroller.current
+    const button = activeButton.current
+    if (!container || !button) return
+    const viewport = container.getBoundingClientRect()
+    const bounds = button.getBoundingClientRect()
+    if (bounds.left < viewport.left) container.scrollLeft += bounds.left - viewport.left
+    else if (bounds.right > viewport.right) container.scrollLeft += bounds.right - viewport.right
+  }, [selected, days.length])
+  return (
+    <nav aria-label="여행 날짜 선택" className="flex w-full min-w-0 max-w-full shrink-0 items-center border-b border-gray-100 bg-white">
+      <button type="button" aria-label="이전 DAY 보기" disabled={selected === 0} onClick={() => onSelect(selected - 1)} className="flex h-12 w-10 shrink-0 items-center justify-center text-[#4169D8] disabled:text-gray-300 focus-visible:outline-2 focus-visible:outline-[#4169D8]"><LeftIc /></button>
+      <div ref={scroller} className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
+        {days.map((day, index) => (
+          <button type="button" key={day.date} ref={index === selected ? activeButton : undefined}
+            onClick={() => onSelect(index)} aria-current={index === selected ? 'date' : undefined}
+            aria-label={`DAY ${day.dayNumber}, ${fmtDate(day.date)} 일정`}
+            className={`min-w-[76px] shrink-0 grow basis-[76px] border-b-2 px-2 py-3 text-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#4169D8] ${index === selected ? 'border-[#4169D8] text-[#4169D8]' : 'border-transparent text-gray-500'}`}>
+            <span className={`block whitespace-nowrap font-semibold ${senior ? 'text-base' : 'text-sm'}`}>DAY {day.dayNumber}</span>
+            <span className="block text-xs text-gray-500">{fmtShort(day.date)}</span>
+          </button>
+        ))}
+      </div>
+      <button type="button" aria-label="다음 DAY 보기" disabled={selected >= days.length - 1} onClick={() => onSelect(selected + 1)} className="flex h-12 w-10 shrink-0 items-center justify-center text-[#4169D8] disabled:text-gray-300 focus-visible:outline-2 focus-visible:outline-[#4169D8]"><RightIc /></button>
+    </nav>
+  )
+}
 function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>>; pastTrip?: Trip }) {
   const currentTrip = pastTrip ?? state.currentTrip
   const sm = state.seniorMode
   const [dayIdx, setDayIdx] = useState(0); const [showAlt, setShowAlt] = useState(false)
   const [editMenu, setEditMenu] = useState<number | null>(null); const [showHard, setShowHard] = useState(false)
-  const [hardSel, setHardSel] = useState<string[]>([])
+  const [hardSel, setHardSel] = useState<ComfortReason[]>([])
+  useEffect(() => {
+    if (!showHard) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowHard(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showHard])
   const [isRebuilding, setIsRebuilding] = useState(false)
   const [rebuildStep, setRebuildStep] = useState(0)
   const readOnly = Boolean(pastTrip)
@@ -1443,25 +1482,14 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
     return () => window.clearInterval(timer)
   }, [isRebuilding])
   const days = currentTrip.days
-  const hardOpts = ['🚶 너무 많이 걸어요', '📍 장소가 너무 많아요', '🚗 이동시간이 길어요', '☕ 쉬는 시간 부족해요']
+  const hardOpts = COMFORT_OPTIONS
   const rebuildComfortableSchedule = () => {
-    if (isRebuilding) return
+    if (isRebuilding || hardSel.length === 0 || readOnly) return
     setIsRebuilding(true)
-    const reasons = hardSel.length ? hardSel.map(reason => reason.replace(/^[^ ]+ /, '')).join(' · ') : '여유로운 여행'
-    const comfortableDays = currentTrip.days.map(day => {
-      const sightseeing = day.places.filter(item => item.tags.includes('관광')).slice(0, 1)
-      const essentials = day.places.filter(item => !item.tags.includes('관광'))
-      const hasRest = essentials.some(item => item.rest)
-      const restStop: ScheduleItem[] = hasRest ? [] : [{ time: '15:30', place: '카페에서 휴식', icon: '☕', tags: ['휴식'], walk: '', cost: '', rest: true }]
-      return {
-        ...day,
-        places: [...essentials, ...sightseeing, ...restStop].sort((a, b) => a.time.localeCompare(b.time)),
-        notice: `${reasons}을(를) 반영해 하루 방문 장소를 줄이고 휴식 시간을 추가했어요.`,
-      }
-    })
+    const rebuiltTrip = rebuildComfortPlan(currentTrip, hardSel)
     // 실제 AI/API 연결 전에도 재생성 과정을 인지할 수 있도록 짧은 로딩 후 새 일정을 적용한다.
     window.setTimeout(() => {
-      setState(current => ({ ...current, currentTrip: { ...current.currentTrip, days: comfortableDays } }))
+      setState(current => ({ ...current, currentTrip: { ...current.currentTrip, originalDays: rebuiltTrip.originalDays, days: rebuiltTrip.days }, activeSchedule: null }))
       setDayIdx(0)
       setShowAlt(false)
       setShowHard(false)
@@ -1498,18 +1526,9 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
     )
   }
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="relative isolate flex h-full w-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-gray-50">
       {readOnly ? <PastTripMap trip={currentTrip} back={() => nav('past-trips')} /> : <CurrentTripMap trip={currentTrip} day={days[dayIdx]} back={() => nav('home')} />}
-      {/* Day tabs */}
-      <div className="flex bg-white border-b border-gray-100 flex-shrink-0 overflow-x-auto scrollbar-hide">
-        {days.map((d, i) => (
-          <button key={i} onClick={() => setDayIdx(i)}
-            className={`flex-shrink-0 flex-1 min-w-[72px] py-3 text-center border-b-2 transition-all ${dayIdx === i ? 'border-[#4169D8] text-[#4169D8]' : 'border-transparent text-gray-400'}`}>
-            <p className={`font-semibold ${sm ? 'text-base' : 'text-sm'}`}>DAY {d.dayNumber}</p>
-            <p className="text-xs font-normal text-gray-400">{fmtShort(d.date)}</p>
-          </button>
-        ))}
-      </div>
+      <ItineraryDaySelector days={days} selected={dayIdx} onSelect={index => { setDayIdx(index); setEditMenu(null) }} senior={sm} />
       {/* Schedule */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-4 pb-36 space-y-1">
         {days[dayIdx]?.notice && <p role="status" className="mb-4 rounded-2xl bg-amber-50 p-4 text-base leading-7 text-amber-900">{days[dayIdx].notice}</p>}
@@ -1558,20 +1577,22 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
           </div>
         ))}
       </div>
+      {showHard && !isRebuilding && <button type="button" aria-label="일정 불편 사유 선택 닫기" onClick={() => setShowHard(false)} className="absolute inset-0 z-[900] cursor-default bg-transparent" />}
       {/* Bottom */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-100 px-5 py-3 space-y-2">
+      <div className={`flex-shrink-0 bg-white border-t border-gray-100 px-5 py-3 space-y-2 ${showHard ? 'relative z-[901]' : ''}`}>
         {readOnly ? (
           <><p className="text-center text-sm text-gray-600">지난 여행은 상세정보만 확인할 수 있어요.</p><PrimaryBtn label="지난 여행 목록으로" onClick={() => nav('past-trips')} sm={sm} /></>
         ) : showHard ? (
           <div className="bg-orange-50 rounded-2xl p-4">
-            <p className="font-semibold text-gray-900 text-sm mb-2">어떤 점이 힘드세요?</p>
+            <p className="font-semibold text-gray-900 text-sm mb-2">어떤 점이 힘드세요?</p><p className="mb-3 text-sm leading-6 text-gray-600">선택한 이유에 맞춰 일정을 새로 바꿔요</p>
             <div className="flex flex-wrap gap-2 mb-3">
               {hardOpts.map(h => (
-                <button key={h} onClick={() => setHardSel(s => s.includes(h) ? s.filter(x => x !== h) : [...s, h])}
-                  className={`text-xs px-3 py-1.5 rounded-full border-2 transition-all ${hardSel.includes(h) ? 'bg-orange-100 border-orange-400 text-orange-700' : 'bg-white border-gray-200 text-gray-600'}`}>{h}</button>
+                <button key={h.id} aria-pressed={hardSel.includes(h.id)} onClick={() => setHardSel(s => s.includes(h.id) ? s.filter(x => x !== h.id) : [...s, h.id])}
+                  className={`text-xs px-3 py-1.5 rounded-full border-2 transition-all ${hardSel.includes(h.id) ? 'bg-orange-100 border-orange-400 text-orange-700' : 'bg-white border-gray-200 text-gray-600'}`}>{h.label}</button>
               ))}
             </div>
-            <button onClick={rebuildComfortableSchedule} disabled={isRebuilding} className="w-full py-3 bg-[#4169D8] text-white rounded-xl text-sm font-bold disabled:opacity-60">{isRebuilding ? '일정을 다시 만들고 있어요…' : '일정 다시 만들기'}</button>
+
+            <button onClick={rebuildComfortableSchedule} disabled={isRebuilding || hardSel.length === 0} className="w-full py-3 bg-[#4169D8] text-white rounded-xl text-sm font-bold disabled:opacity-60">{isRebuilding ? '일정을 다시 만들고 있어요…' : '일정 다시 만들기'}</button>
           </div>
         ) : (
           <>
@@ -1930,7 +1951,7 @@ export default function App() {
           <span>9:41</span>
           <div className="flex items-center gap-1.5"><span>●●●●</span><span>WiFi</span><span>🔋</span></div>
         </div>
-        <div className="flex-1 overflow-hidden flex flex-col">{screenEl}</div>
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">{screenEl}</div>
         {showNav && <BottomNav active={state.screen} nav={nav} sm={sm} notifs={unreadCount(state.notifications)} />}
       </div>
     </div>
