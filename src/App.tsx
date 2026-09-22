@@ -71,7 +71,7 @@ const TRANSPORTS = [{ id: '자동차', e: '🚗' }, { id: '대중교통', e: '�
 interface TravelNotification { id: string; e: string; title: string; body: string; unread: boolean; t: string }
 const INITIAL_NOTIFICATIONS: TravelNotification[] = [
   { id: 'trip-reminder-20260924', e: '✈️', title: '여행 D-5', body: '강릉 여행이 5일 남았어요.', unread: true, t: '방금' },
-  { id: 'weather-20260924', e: '🌧', title: '오늘 비 예보', body: '강수확률이 높아요. 비 오는 날 일정을 확인해보세요. (오늘 날씨 > Plan B 확인)', unread: true, t: '방금' },
+  { id: 'weather-20260924', e: '🌧', title: '오늘 비 예보', body: '강수확률이 높아요. 비 오는 날 일정을 확인해보세요. (오늘 날씨 > 계획 2 확인)', unread: true, t: '방금' },
   { id: 'taste-analysis', e: '🤖', title: 'AI 취향 분석 완료', body: '바다·맛집·휴식을 좋아하신다고 분석했어요.', unread: false, t: '3시간 전' },
   { id: 'itinerary-update', e: '✏️', title: '일정 변경', body: '동행자가 일정을 수정했어요.', unread: false, t: '어제' },
 ]
@@ -278,8 +278,8 @@ function SetupScreen({ onDone }: { onDone: (style: string, prefs: string[], seni
   )
 }
 
-// [기능] 홈의 오늘 날씨 타일에서 여는 날씨 상세 화면이다. 날씨별 Plan A/B/C 일정을 전환해 보여준다.
-// [기능] 현재 날씨를 보여주고, 날씨별 Plan A/B/C를 오늘 일정에 적용한 뒤 오늘의 여행 화면으로 연결한다.
+// [기능] 홈의 오늘 날씨 타일에서 여는 날씨 상세 화면이다. 날씨별 계획 1/B/C 일정을 전환해 보여준다.
+// [기능] 현재 날씨를 보여주고, 날씨별 계획 1/B/C를 오늘 일정에 적용한 뒤 오늘의 여행 화면으로 연결한다.
 function WeatherScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
   const [plan, setPlan] = useState<'A' | 'B' | 'C'>(state.weatherPlan)
   // 현재 날씨 API 연결 전까지는 비 예보 목업을 사용한다. API 응답의 condition/temp/precip 값으로 교체 가능하다.
@@ -302,7 +302,7 @@ function WeatherScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
           if (isFixed || placeCursor >= active.places.length) return item
           const place = active.places[placeCursor]
           placeCursor += 1
-          return { ...item, place, icon: active.icon, tags: ['날씨 플랜', `Plan ${plan}`], rest: plan === 'C' }
+          return { ...item, place, icon: active.icon, tags: ['날씨 플랜', `계획 ${{ A: 1, B: 2, C: 3 }[plan]}`], rest: plan === 'C' }
         })
         return { ...day, places, notice: `${active.title}을 현재 날씨에 맞춰 적용했어요.` }
       })
@@ -314,14 +314,32 @@ function WeatherScreen({ state, nav, setState }: { state: AppState; nav: (s: Scr
     <div className="flex h-full flex-col bg-[#F3F7FF]">
       <PageHeader title="오늘 날씨" back={() => nav('home')} />
       <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-7">
-        <section className="rounded-3xl bg-[#173B76] p-5 text-white shadow-lg"><p className="text-sm font-bold text-blue-200">강릉 · 현재 날씨</p><div className="mt-2 flex items-end justify-between"><div className="flex items-end gap-3"><span className="text-5xl">{weather.icon}</span><strong className="text-4xl">{weather.temp}</strong><span className="pb-1 text-base text-blue-100">{weather.label}</span></div><span className="rounded-xl bg-amber-300/20 px-3 py-2 text-sm font-bold text-amber-100">Plan B 추천</span></div><div className="mt-5 grid grid-cols-3 gap-2 text-center text-sm"><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">강수확률</p><b className="mt-1 block text-lg">{weather.precip}</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">습도</p><b className="mt-1 block text-lg">{weather.humidity}</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">바람</p><b className="mt-1 block text-lg">{weather.wind}</b></div></div></section>
-        <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-xl font-black text-gray-900">날씨별 오늘 일정</h2><p className="mt-1 text-sm text-gray-500">현재 비 예보에는 Plan B를 추천해요. 원하시는 플랜을 선택할 수 있어요.</p><div className="mt-4 grid grid-cols-3 gap-2">{(['A', 'B', 'C'] as const).map(item => <button key={item} onClick={() => setPlan(item)} className={`min-h-12 rounded-xl text-sm font-black ${plan === item ? 'bg-[#4169D8] text-white' : 'bg-[#F1F4FF] text-[#4169D8]'}`}>Plan {item}</button>)}</div><div className="mt-4 rounded-2xl bg-[#F7F8FF] p-4"><div className="flex items-center gap-2"><span className="text-2xl">{active.icon}</span><h3 className="font-bold text-gray-900">{active.title}</h3></div><p className="mt-2 text-sm leading-6 text-gray-600">{active.detail}</p><button onClick={applyPlanAndOpenToday} className="mt-4 min-h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">이 일정으로 여행 보기</button></div></section>
+        <section className="rounded-3xl bg-[#173B76] p-5 text-white shadow-lg"><p className="text-sm font-bold text-blue-200">강릉 · 현재 날씨</p><div className="mt-2 flex items-end justify-between"><div className="flex items-end gap-3"><span className="text-5xl">{weather.icon}</span><strong className="text-4xl">{weather.temp}</strong><span className="pb-1 text-base text-blue-100">{weather.label}</span></div><span className="rounded-xl bg-amber-300/20 px-3 py-2 text-sm font-bold text-amber-100">계획 2 추천</span></div><div className="mt-5 grid grid-cols-3 gap-2 text-center text-sm"><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">강수확률</p><b className="mt-1 block text-lg">{weather.precip}</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">습도</p><b className="mt-1 block text-lg">{weather.humidity}</b></div><div className="rounded-xl bg-white/10 p-3"><p className="text-blue-200">바람</p><b className="mt-1 block text-lg">{weather.wind}</b></div></div></section>
+        <section className="mt-5 rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-xl font-black text-gray-900">날씨별 오늘 일정</h2><p className="mt-1 text-sm text-gray-500">현재 비 예보에는 계획 2를 추천해요. 원하시는 계획을 선택할 수 있어요.</p><div className="mt-4 grid grid-cols-3 gap-2">{(['A', 'B', 'C'] as const).map(item => <button key={item} onClick={() => setPlan(item)} className={`min-h-12 rounded-xl text-sm font-black ${plan === item ? 'bg-[#4169D8] text-white' : 'bg-[#F1F4FF] text-[#4169D8]'}`}>계획 {({ A: 1, B: 2, C: 3 } as const)[item]}</button>)}</div><div className="mt-4 rounded-2xl bg-[#F7F8FF] p-4"><div className="flex items-center gap-2"><span className="text-2xl">{active.icon}</span><h3 className="font-bold text-gray-900">{active.title}</h3></div><p className="mt-2 text-sm leading-6 text-gray-600">{active.detail}</p><button onClick={applyPlanAndOpenToday} className="mt-4 min-h-11 w-full rounded-xl bg-[#4169D8] text-sm font-bold text-white">이 일정으로 여행 보기</button></div></section>
         <section className="mt-5 rounded-3xl bg-amber-50 p-5"><h2 className="font-black text-amber-950">🎉 행사 · 축제 반영</h2><p className="mt-2 text-sm leading-6 text-amber-900">강릉 커피거리 주말 행사 시간대를 고려해 방문 순서를 추천했어요.</p></section>
       </div>
     </div>
   )
 }// [기능] 시니어 모드 홈 화면이다. 큰 기능 타일을 두 페이지로 나누고 명확한 이동 경로를 제공한다.
-function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
+function HomeModeSwitch({ enabled, onToggle, onNotifications, unread }: { enabled: boolean; onToggle: () => void; onNotifications: () => void; unread: number }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 px-5 pt-3">
+      <button type="button" role="switch" aria-checked={enabled} aria-label="시니어 모드" onClick={onToggle}
+        className="flex min-h-11 items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#4169D8]">
+        <span className="text-sm font-bold text-gray-700">시니어 모드</span>
+        <span aria-hidden="true" className={`relative h-7 w-12 rounded-full ${enabled ? 'bg-[#4169D8]' : 'bg-gray-500'}`}>
+          <span className={`absolute top-1 size-5 rounded-full bg-white shadow transition-transform motion-reduce:transition-none ${enabled ? 'translate-x-6' : 'translate-x-1'} left-0`} />
+        </span>
+        <span aria-hidden="true" className="w-7 text-xs font-bold text-gray-700">{enabled ? 'ON' : 'OFF'}</span>
+      </button>
+      <button type="button" onClick={onNotifications} aria-label={unread > 0 ? `알림 열기, 읽지 않은 알림 ${unread}개` : '알림 열기'} className="relative flex size-11 shrink-0 items-center justify-center bg-transparent text-gray-700 focus-visible:outline-2 focus-visible:outline-[#4169D8]">
+        <span aria-hidden="true" className="inline-flex scale-[1.2]"><BellIc /></span>
+        {unread > 0 && <span aria-hidden="true" className="absolute right-2 top-2 size-2 rounded-full bg-red-500" />}
+      </button>
+    </div>
+  )
+}
+function SeniorHomeScreen({ state, nav, onToggleMode }: { state: AppState; nav: (s: Screen) => void; onToggleMode: () => void }) {
   const [page, setPage] = useState(0)
   const pages = [
     [
@@ -341,9 +359,9 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
   const trip = state.currentTrip
   return (
     <div className="h-full overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F3F7FF 0%,#F9F5FF 46%,#F2FBF8 100%)' }}>
-      <header className="flex items-center justify-between px-5 pt-12 pb-5">
+      <HomeModeSwitch enabled={state.seniorMode} onToggle={onToggleMode} onNotifications={() => nav('notifications')} unread={unreadCount(state.notifications)} />
+      <header className="flex items-center justify-between px-5 pt-2 pb-5">
         <div><p className="text-base font-bold text-[#4169D8]">여행메이트</p><h1 className="mt-1 text-2xl font-black text-gray-900">안녕하세요, {state.userName}님</h1><p className="mt-1 text-base text-gray-600">어디로 떠나볼까요?</p></div>
-        <button onClick={() => nav('notifications')} aria-label="알림 열기" className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm"><BellIc />{unreadCount(state.notifications) > 0 && <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />}</button>
       </header>
       <main className="px-5 pb-7">
         <section aria-label="여행지 검색" className="rounded-3xl bg-white p-4 shadow-sm">
@@ -369,28 +387,25 @@ function SeniorHomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) =>
 }
 // ─── Home ─────────────────────────────────────────────────────────────────────
 // [기능] 일반 모드 홈 화면이다. 여행 생성, 예정 여행, 저장 장소 및 지난 여행 진입점을 구성한다.
-function HomeScreen({ state, nav }: { state: AppState; nav: (s: Screen) => void }) {
+function HomeScreen({ state, nav, onToggleMode }: { state: AppState; nav: (s: Screen) => void; onToggleMode: () => void }) {
   const { userName, currentTrip, savedPlaces, seniorMode: sm } = state
   const notifs = unreadCount(state.notifications)
   const until = daysUntil(currentTrip.startDate)
   const ongoing = until <= 0
   const tl = sm ? 'text-xl' : 'text-lg'
   const ts = sm ? 'text-base' : 'text-sm'
-  if (sm) return <SeniorHomeScreen state={state} nav={nav} />
+  if (sm) return <SeniorHomeScreen state={state} nav={nav} onToggleMode={onToggleMode} />
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ background: 'linear-gradient(160deg,#F0F4FF 0%,#F7F0FF 30%,#F0FAFF 70%,#F7F8FF 100%)' }}>
       {/* Header */}
-      <div className="px-5 pt-12 pb-2 flex items-center justify-between flex-shrink-0">
+      <HomeModeSwitch enabled={sm} onToggle={onToggleMode} onNotifications={() => nav('notifications')} unread={notifs} />
+      <div className="px-5 pt-2 pb-2 flex items-center justify-between flex-shrink-0">
         <div>
           <p className="text-xs text-gray-400 font-medium">여행메이트 ✈️</p>
           <h1 className={`font-bold text-gray-900 ${sm ? 'text-2xl' : 'text-xl'}`}>안녕하세요, {userName}님</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => nav('notifications')} className="relative w-10 h-10 rounded-full bg-white flex items-center justify-center" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-            <BellIc />
-            {notifs > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />}
-          </button>
           <button onClick={() => nav('profile')} className="w-10 h-10 rounded-full bg-[#4169D8] flex items-center justify-center text-white font-bold">{userName[0]}</button>
         </div>
       </div>
@@ -957,7 +972,7 @@ function MapScreen({ nav }: { nav: (s: Screen) => void }) {
         </div>
       </div>
       <div className="flex-1 relative min-h-0" aria-label="현재 위치 기반 지도">
-        <MapContainer center={[location.lat, location.lng]} zoom={15} scrollWheelZoom className="h-full w-full" aria-label="OpenStreetMap 지도">
+        <MapContainer attributionControl={false} center={[location.lat, location.lng]} zoom={15} scrollWheelZoom className="h-full w-full" aria-label="OpenStreetMap 지도">
           <MapRecenter location={location} />
           <ExploreMapTiles style={mapStyle} />
           <CircleMarker center={[location.lat, location.lng]} radius={10} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#16A34A', fillOpacity: 1 }}>
@@ -968,6 +983,11 @@ function MapScreen({ nav }: { nav: (s: Screen) => void }) {
         </MapContainer>
         <button onClick={() => nav('trip-places')} className="absolute top-4 right-4 z-[500] min-h-10 rounded-xl bg-white px-3 py-2 text-xs font-bold text-[#4169D8] shadow-md">추천 코스</button>
         {sel && <div className="absolute bottom-4 left-4 right-4 z-[500] rounded-2xl bg-white p-4 shadow-lg"><div className="flex items-start justify-between mb-2"><div><h2 className="font-bold text-gray-900">{sel.name}</h2><p className="text-xs text-gray-500">{sel.dist} · {sel.cat}</p></div><div className="flex items-center gap-1"><StarIc /><span className="text-sm font-semibold">{sel.r}</span></div></div><div className="flex gap-2"><button onClick={() => nav('place-detail')} className="flex-1 min-h-11 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700">상세보기</button><button onClick={() => nav('trip-places')} className="flex-1 min-h-11 rounded-xl bg-[#4169D8] text-sm font-semibold text-white">여행 만들기</button></div></div>}
+      </div>
+      <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-1.5 text-[11px] leading-4 text-gray-500" aria-label="지도 출처">
+        {mapStyle === 'standard'
+          ? <span>지도 출처: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap 기여자</a></span>
+          : <span>위성영상 출처: © <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noreferrer" className="underline">Esri, Maxar, Earthstar Geographics</a> 및 GIS 사용자 커뮤니티</span>}
       </div>
     </div>
   )
@@ -1024,12 +1044,19 @@ function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Sc
   const sm = state.seniorMode
   // 기기 기준 오늘 날짜를 사용해 현재 달력을 만들고, 오늘 이전 날짜는 선택 대상에서 제외한다.
   const today = new Date()
-  const calendarYear = today.getFullYear()
-  const calendarMonth = today.getMonth()
+  const currentMonth = today.getFullYear() * 12 + today.getMonth()
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const saved = state.draft.startDate
+    if (!saved) return currentMonth
+    const [year, month] = saved.split('-').map(Number)
+    return Math.max(currentMonth, year * 12 + month - 1)
+  })
+  const calendarYear = Math.floor(visibleMonth / 12)
+  const calendarMonth = visibleMonth % 12
   const monthDays = Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, i) => i + 1)
   const firstDay = new Date(calendarYear, calendarMonth, 1).getDay()
   const toIso = (year: number, month: number, day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  const todayIso = toIso(calendarYear, calendarMonth, today.getDate())
+  const todayIso = toIso(today.getFullYear(), today.getMonth(), today.getDate())
 
   // [기능] 날짜 선택 화면에서 시작일·종료일의 순서와 오늘 이전 날짜 차단을 처리하는 내부 선택 함수다.
   function pick(day: number) {
@@ -1043,13 +1070,18 @@ function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Sc
   const mk = (day: number) => toIso(calendarYear, calendarMonth, day)
   const nights = start && end ? nightsCount(start, end) : 0
   const days = start && end ? dayCount(start, end) : 0
+  const validRange = Boolean(start && end && start >= todayIso && end >= start && days <= 366)
   return (
     <div className="h-full bg-white flex flex-col">
       <PageHeader title="날짜 선택" back={() => nav('trip-places')} />
       <div className="px-5 py-3 flex-shrink-0"><p className="text-sm font-semibold text-[#4169D8] mb-0.5">여행 만들기 2/6</p><p className={`font-bold text-gray-900 ${sm ? 'text-xl' : 'text-lg'}`}>언제 떠나세요?</p><p className="mt-1 text-xs text-gray-400">오늘 이전 날짜는 선택할 수 없어요.</p></div>
-      <div className="flex-1 px-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5">
         <div className="bg-white rounded-2xl p-4 mb-3" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-          <p className="text-center font-bold text-gray-900 mb-3">{calendarYear}년 {calendarMonth + 1}월</p>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+            <button type="button" aria-label="이전 달" disabled={visibleMonth <= currentMonth} onClick={() => setVisibleMonth(month => Math.max(currentMonth, month - 1))} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-[#4169D8] disabled:text-gray-300 focus-visible:outline-2"><LeftIc /></button>
+            <p aria-live="polite" className="min-w-0 flex-1 text-center text-base font-bold text-gray-900">{calendarYear}년 {calendarMonth + 1}월</p>
+            <button type="button" aria-label="다음 달" disabled={visibleMonth >= 9999 * 12 + 11} onClick={() => setVisibleMonth(month => month + 1)} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-[#4169D8] disabled:text-gray-300 focus-visible:outline-2"><RightIc /></button>
+          </div>
           <div className="grid grid-cols-7 gap-1 mb-1">{['일', '월', '화', '수', '목', '금', '토'].map(day => <div key={day} className="text-center text-xs text-gray-400 py-1">{day}</div>)}</div>
           <div className="grid grid-cols-7 gap-1">
             {Array(firstDay).fill(null).map((_, index) => <div key={`empty-${index}`} />)}
@@ -1062,9 +1094,9 @@ function TripDateScreen({ state, nav, setState }: { state: AppState; nav: (s: Sc
             })}
           </div>
         </div>
-        {start && end && <div className="bg-[#EEF2FF] rounded-2xl p-4 text-center mb-4"><p className={`font-bold text-[#4169D8] ${sm ? 'text-xl' : 'text-lg'}`}>{fmtDate(start)} ~ {fmtDate(end)}</p><p className="text-sm text-gray-500 mt-1">{nights}박 {days}일 · DAY 1~{days}</p></div>}
+        {start && end && <div className="bg-[#EEF2FF] rounded-2xl p-4 text-center mb-4"><p className={`font-bold text-[#4169D8] ${sm ? 'text-xl' : 'text-lg'}`}>{start.replace(/-/g, '.')} ~ {end.replace(/-/g, '.')}</p><p className="text-sm text-gray-500 mt-1">{nights}박 {days}일 · DAY 1~{days}</p></div>}
       </div>
-      <div className="px-5 pb-6 flex-shrink-0"><PrimaryBtn label="날짜 선택 완료" disabled={!start || !end} onClick={() => { setState(current => ({ ...current, draft: { ...current.draft, startDate: start, endDate: end } })); nav('trip-people') }} sm={sm} /></div>
+      <div className="px-5 pb-6 flex-shrink-0">{days > 366 && <p role="alert" className="mb-2 text-sm text-red-600">여행 기간은 366일 이내로 선택해주세요.</p>}<PrimaryBtn label="날짜 선택 완료" disabled={!validRange} onClick={() => { if (!validRange) return; setState(current => ({ ...current, draft: { ...current.draft, startDate: start, endDate: end } })); nav('trip-people') }} sm={sm} /></div>
     </div>
   )
 }
@@ -1995,7 +2027,7 @@ export default function App() {
       case 'login': return <LoginScreen onLogin={() => nav('setup')} onRegister={() => nav('register')} />
       case 'register': return <RegisterScreen onDone={() => nav('setup')} />
       case 'setup': return <SetupScreen onDone={(style, prefs, senior) => { setState(s => ({ ...s, travelStyle: style, userPrefs: prefs, seniorMode: senior })); nav('home') }} />
-      case 'home': return <HomeScreen state={state} nav={nav} />
+      case 'home': return <HomeScreen state={state} nav={nav} onToggleMode={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} />
       case 'search-text':
       case 'search-voice': return <PlaceSearchScreen startVoiceRef={startVoiceRef} key={state.screen} voice={state.screen === 'search-voice'} nav={nav} onSelect={place => { setState(s => ({ ...s, selectedPlace: place })); nav('place-detail') }} />
       case 'camera': return <CameraScreen nav={nav} />
@@ -2025,7 +2057,7 @@ export default function App() {
       case 'past-trips': return <PastTripsScreen state={state} nav={nav} setState={setState} />
       case 'notifications': return <NotificationsScreen notifications={state.notifications} nav={nav} setState={setState} />
       case 'profile': return <ProfileScreen state={state} nav={nav} setState={setState} />
-      default: return <HomeScreen state={state} nav={nav} />
+      default: return <HomeScreen state={state} nav={nav} onToggleMode={() => setState(current => ({ ...current, seniorMode: !current.seniorMode }))} />
     }
   })()
 
@@ -2038,7 +2070,7 @@ export default function App() {
           <div className="flex items-center gap-1.5"><span>●●●●</span><span>WiFi</span><span>🔋</span></div>
         </div>
         <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">{screenEl}</div>
-        {showRainAlert && <button type="button" onClick={openRainPlan} className="absolute inset-x-4 top-16 z-[2000] rounded-2xl border border-[#4169D8]/20 bg-white p-4 text-left shadow-lg" aria-label="비 예보 알림. 눌러서 비 오는 날 일정 Plan B 확인"><div className="flex items-start gap-3"><span className="text-3xl">🌧️</span><div className="min-w-0 flex-1"><p className="text-sm font-black text-[#4169D8]">날씨 알림</p><p className="mt-1 text-base font-bold text-gray-900">강릉 지역에 비가 올 예정이에요.</p><p className="mt-1 text-sm leading-5 text-gray-600">강수확률 70% · 실내 중심 Plan B를 확인해보세요.</p><p className="mt-2 text-xs font-bold text-[#4169D8]">눌러서 오늘 일정 확인하기</p></div></div></button>}
+        {showRainAlert && <button type="button" onClick={openRainPlan} className="absolute inset-x-4 top-16 z-[2000] rounded-2xl border border-[#4169D8]/20 bg-white p-4 text-left shadow-lg" aria-label="비 예보 알림. 눌러서 비 오는 날 일정 계획 2 확인"><div className="flex items-start gap-3"><span className="text-3xl">🌧️</span><div className="min-w-0 flex-1"><p className="text-sm font-black text-[#4169D8]">날씨 알림</p><p className="mt-1 text-base font-bold text-gray-900">강릉 지역에 비가 올 예정이에요.</p><p className="mt-1 text-sm leading-5 text-gray-600">강수확률 70% · 실내 중심 계획 2를 확인해보세요.</p><p className="mt-2 text-xs font-bold text-[#4169D8]">눌러서 오늘 일정 확인하기</p></div></div></button>}
         {showNav && <BottomNav active={state.screen} nav={nav} sm={sm} notifs={unreadCount(state.notifications)} />}
       </div>
     </div>
