@@ -1446,6 +1446,30 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
   }, [isRebuilding])
   const days = currentTrip.days
   const hardOpts = ['🚶 너무 많이 걸어요', '📍 장소가 너무 많아요', '🚗 이동시간이 길어요', '☕ 쉬는 시간 부족해요']
+  // 다른 추천 일정 선택 시 관광 장소를 해당 테마의 대체 코스로 실제 교체한다.
+  const applyAlternativeSchedule = (theme: 'nature' | 'food') => {
+    const options = theme === 'nature'
+      ? { label: '자연 중심 코스', icon: '🌿', tags: ['대체 코스', '자연', '산책', '휴식'], places: ['경포호 산책', '강릉솔향수목원', '안목해변 산책로', '경포대 숲길', '오죽헌 정원'] }
+      : { label: '맛집 집중 코스', icon: '🍲', tags: ['대체 코스', '맛집', '식사', '휴식'], places: ['초당두부마을', '강릉 중앙시장', '강릉 커피거리', '주문진 수산시장', '명주동 카페거리'] }
+    const knownAlternativeNames = ['경포호 산책', '강릉솔향수목원', '안목해변 산책로', '경포대 숲길', '오죽헌 정원', '초당두부마을', '강릉 중앙시장', '강릉 커피거리', '주문진 수산시장', '명주동 카페거리']
+    const updatedDays = currentTrip.days.map((day, dayIndex) => {
+      let placeCursor = dayIndex * 2
+      const places = day.places.map(item => {
+        const alreadyAlternative = item.tags.includes('대체 코스') || knownAlternativeNames.includes(item.place)
+        const ordinaryVisit = !item.tags.includes('출발') && !item.tags.includes('귀가') && !item.tags.includes('숙소') && !item.tags.includes('식사') && !item.rest
+        if (!alreadyAlternative && !ordinaryVisit) return item
+        const place = options.places[placeCursor % options.places.length]
+        placeCursor += 1
+        return { ...item, place, icon: options.icon, tags: options.tags, walk: '도보 8분', rest: theme === 'nature' }
+      })
+      // 하루에 교체할 방문 장소가 없으면 추천 장소 두 곳을 추가해 코스 변경이 즉시 보이게 한다.
+      const changed = places.some(item => item.tags.includes('대체 코스'))
+      const nextPlaces = changed ? places : [...places, ...options.places.slice(0, 2).map((place, index) => ({ time: index === 0 ? '13:30' : '15:00', place, icon: options.icon, tags: options.tags, walk: '도보 8분', cost: '무료', rest: theme === 'nature' }))].sort((a, b) => a.time.localeCompare(b.time))
+      return { ...day, places: nextPlaces, notice: `${options.label} 전체 코스를 적용했어요. 지도와 일정 목록에서 변경된 장소를 확인하세요.` }
+    })
+    setState(current => ({ ...current, currentTrip: { ...current.currentTrip, title: `${current.currentTrip.title.replace(/ · (자연 중심 코스|맛집 집중 코스)$/, '')} · ${options.label}`, days: updatedDays } }))
+    setDayIdx(0); setShowAlt(false); setShowHard(false); setHardSel([]); setEditMenu(null)
+  }
   const rebuildComfortableSchedule = () => {
     if (isRebuilding) return
     setIsRebuilding(true)
@@ -1500,12 +1524,12 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
     )
   }
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="relative flex h-full flex-col overflow-hidden bg-gray-50" onClick={event => { const target = event.target as HTMLElement; if (showHard && !target.closest('[data-hard-panel]')) setShowHard(false); if (showAlt && !target.closest('[data-alt-panel]')) setShowAlt(false) }}>
       {readOnly ? <PastTripMap trip={currentTrip} back={() => nav('past-trips')} /> : <CurrentTripMap trip={currentTrip} day={days[dayIdx]} back={() => nav('home')} />}
       {/* Day tabs */}
       <div className="flex bg-white border-b border-gray-100 flex-shrink-0 overflow-x-auto scrollbar-hide">
         {days.map((d, i) => (
-          <button key={i} onClick={() => setDayIdx(i)}
+          <button key={i} onClick={() => { setDayIdx(i); setShowHard(false); setEditMenu(null) }}
             className={`flex-shrink-0 flex-1 min-w-[72px] py-3 text-center border-b-2 transition-all ${dayIdx === i ? 'border-[#4169D8] text-[#4169D8]' : 'border-transparent text-gray-400'}`}>
             <p className={`font-semibold ${sm ? 'text-base' : 'text-sm'}`}>DAY {d.dayNumber}</p>
             <p className="text-xs font-normal text-gray-400">{fmtShort(d.date)}</p>
@@ -1526,7 +1550,7 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
                                     <button type="button" aria-label={readOnly ? `${item.place} 상세정보 보기` : `${item.place} 일정 편집`}
                     onClick={event => {
                       if (readOnly) { detailTrigger.current = event.currentTarget; setDetail(item) }
-                      else setEditMenu(editMenu === i ? null : i)
+                      else { setShowHard(false); setEditMenu(editMenu === i ? null : i) }
                     }}
                     className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-[#4169D8] focus-visible:outline-4 focus-visible:outline-[#4169D8]">{readOnly ? '상세' : <MoreIc />}</button>
                 </div>
@@ -1550,13 +1574,14 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
           </div>
         ))}
         {!readOnly && (!showAlt ? (
-          <button onClick={() => setShowAlt(true)} className="w-full py-3.5 text-sm text-[#4169D8] font-semibold border-2 border-dashed border-[#4169D8]/30 rounded-2xl">다른 일정 보기</button>
+          <button onClick={() => { setShowAlt(true); setShowHard(false); setEditMenu(null) }} className="w-full py-3.5 text-sm text-[#4169D8] font-semibold border-2 border-dashed border-[#4169D8]/30 rounded-2xl">다른 일정 보기</button>
         ) : (
-          <div className="bg-[#EEF2FF] rounded-2xl p-4">
-            <p className="font-semibold text-[#4169D8] mb-2 text-sm">다른 추천 일정</p>
-            <p className="text-xs text-gray-500 mb-1">• 다른 일정 1 — 자연 중심 코스</p>
-            <p className="text-xs text-gray-500">• 다른 일정 2 — 맛집 집중 코스</p>
-            <button className="mt-2 text-xs text-[#4169D8] font-semibold">선택하기 →</button>
+          <div data-alt-panel className="bg-[#EEF2FF] rounded-2xl p-4">
+            <div className="mb-3 flex items-center justify-between"><p className="font-semibold text-[#4169D8] text-sm">다른 추천 일정</p><button onClick={() => setShowAlt(false)} className="text-xs font-semibold text-gray-500">닫기</button></div>
+            <div className="space-y-2">
+              <button onClick={() => applyAlternativeSchedule('nature')} className="w-full rounded-xl bg-white p-3 text-left shadow-sm active:scale-[0.98]"><p className="font-bold text-gray-900">🌿 다른 일정 1 · 자연 중심 코스</p><p className="mt-1 text-xs text-gray-500">산책과 휴식 시간을 넉넉하게 반영해요.</p><span className="mt-2 inline-block text-xs font-bold text-[#4169D8]">이 일정 선택하기 →</span></button>
+              <button onClick={() => applyAlternativeSchedule('food')} className="w-full rounded-xl bg-white p-3 text-left shadow-sm active:scale-[0.98]"><p className="font-bold text-gray-900">🍲 다른 일정 2 · 맛집 집중 코스</p><p className="mt-1 text-xs text-gray-500">식사와 카페 방문 중심으로 구성해요.</p><span className="mt-2 inline-block text-xs font-bold text-[#4169D8]">이 일정 선택하기 →</span></button>
+            </div>
           </div>
         ))}
       </div>
@@ -1565,7 +1590,7 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
         {readOnly ? (
           <><p className="text-center text-sm text-gray-600">지난 여행은 상세정보만 확인할 수 있어요.</p><PrimaryBtn label="지난 여행 목록으로" onClick={() => nav('past-trips')} sm={sm} /></>
         ) : showHard ? (
-          <div className="bg-orange-50 rounded-2xl p-4">
+          <div data-hard-panel className="bg-orange-50 rounded-2xl p-4">
             <p className="font-semibold text-gray-900 text-sm mb-2">어떤 점이 힘드세요?</p>
             <div className="flex flex-wrap gap-2 mb-3">
               {hardOpts.map(h => (
@@ -1577,7 +1602,7 @@ function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; 
           </div>
         ) : (
           <>
-            <button onClick={() => setShowHard(true)} className="w-full py-3 border-2 border-orange-200 text-orange-500 rounded-2xl text-sm font-semibold">😥 일정이 힘들어요</button>
+            <button onClick={() => { setShowHard(true); setShowAlt(false); setEditMenu(null) }} className="w-full py-3 border-2 border-orange-200 text-orange-500 rounded-2xl text-sm font-semibold">😥 일정이 힘들어요</button>
             <div className="flex gap-2">
               <button onClick={() => nav('accommodation')} className={`flex-1 rounded-2xl bg-[#4169D8] text-white font-bold text-sm ${sm ? 'h-14' : 'h-12'}`}>숙소 확정하기</button>
               <button onClick={() => nav('today-travel')} className={`flex-1 rounded-2xl bg-[#EEF2FF] text-[#4169D8] font-bold text-sm ${sm ? 'h-14' : 'h-12'}`}>오늘의 여행</button>
