@@ -19,7 +19,7 @@ type Screen =
   | 'trip-places' | 'trip-date' | 'trip-people' | 'trip-transport'
   | 'trip-budget' | 'trip-companions' | 'trip-confirm' | 'ai-loading' | 'itinerary'
   | 'accommodation' | 'pre-departure' | 'today-travel' | 'weather' | 'directions'
-  | 'past-trips' | 'notifications' | 'profile'
+  | 'past-trips' | 'past-itinerary' | 'notifications' | 'profile'
 
 interface Place { id: string; name: string; region: string; tags: string[]; img: string }
 interface Companion { name: string; age: string; prefs: string[]; walking: string; avoid: string[]; permission?: 'edit' | 'view' }
@@ -83,7 +83,7 @@ function initialAppState(): AppState {
 interface AppState {
   screen: Screen; screenHistory: Screen[]
   seniorMode: boolean; userName: string; userPrefs: string[]; travelStyle: string
-  currentTrip: Trip; notifications: TravelNotification[]
+  currentTrip: Trip; viewedPastTrip?: Trip; notifications: TravelNotification[]
   selectedPlace: Place | null; activeSchedule: ScheduleItem | null; savedPlaces: Place[]; aiPrefs: string[]
   draft: { selectedPlaces?: Place[]; startDate?: string; endDate?: string; travelers?: number; transport?: string[]; budget?: string; companions?: Companion[] }
 }
@@ -1426,14 +1426,16 @@ function CurrentTripMap({ trip, day, back }: { trip: Trip; day: Trip['days'][num
 }
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 // [기능] 전체 일정 조회·편집·불편 사유 기반의 더 여유로운 일정 재생성을 담당한다.
-function ItineraryScreen({ state, nav, setState }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>> }) {
-  const { currentTrip, seniorMode: sm } = state
+// pastTrip이 전달되면 전역 현재 여행을 변경하지 않고, 지난 여행을 읽기 전용으로 표시한다.
+function ItineraryScreen({ state, nav, setState, pastTrip }: { state: AppState; nav: (s: Screen) => void; setState: React.Dispatch<React.SetStateAction<AppState>>; pastTrip?: Trip }) {
+  const currentTrip = pastTrip ?? state.currentTrip
+  const sm = state.seniorMode
   const [dayIdx, setDayIdx] = useState(0); const [showAlt, setShowAlt] = useState(false)
   const [editMenu, setEditMenu] = useState<number | null>(null); const [showHard, setShowHard] = useState(false)
   const [hardSel, setHardSel] = useState<string[]>([])
   const [isRebuilding, setIsRebuilding] = useState(false)
   const [rebuildStep, setRebuildStep] = useState(0)
-  const readOnly = currentTrip.status === 'past'
+  const readOnly = Boolean(pastTrip)
   const [detail, setDetail] = useState<ScheduleItem | null>(null)
   const detailHeading = useRef<HTMLHeadingElement>(null)
   const detailTrigger = useRef<HTMLButtonElement | null>(null)
@@ -1530,7 +1532,7 @@ function ItineraryScreen({ state, nav, setState }: { state: AppState; nav: (s: S
                       if (readOnly) { detailTrigger.current = event.currentTarget; setDetail(item) }
                       else setEditMenu(editMenu === i ? null : i)
                     }}
-                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl focus-visible:outline-4 focus-visible:outline-[#4169D8]"><MoreIc /></button>
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-[#4169D8] focus-visible:outline-4 focus-visible:outline-[#4169D8]">{readOnly ? '상세' : <MoreIc />}</button>
                 </div>
                 {!readOnly && editMenu === i && (
                   <div className="mt-2 bg-gray-50 rounded-xl overflow-hidden">
@@ -1757,7 +1759,7 @@ function PastTripsScreen({ state, nav, setState }: { state: AppState; nav: (s: S
                   <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{p.place}</span>
                 )).slice(0, 4)}
               </div>
-              <button onClick={() => { setState(s => ({ ...s, currentTrip: t })); nav('itinerary') }}
+              <button onClick={() => { setState(s => ({ ...s, viewedPastTrip: t })); nav('past-itinerary') }}
                 className="w-full h-11 rounded-xl bg-[#EEF2FF] text-[#4169D8] font-bold text-sm active:scale-95">
                 여행 다시보기 →
               </button>
@@ -1912,7 +1914,8 @@ export default function App() {
       case 'trip-companions': return <TripCompanionsScreen state={state} nav={nav} setState={setState} />
       case 'trip-confirm': return <TripConfirmScreen state={state} nav={nav} setState={setState} />
       case 'ai-loading': return <AILoadingScreen nav={nav} />
-      case 'itinerary': return <ItineraryScreen state={state} nav={nav} setState={setState} />
+      case 'itinerary': return <ItineraryScreen key={'current-' + state.currentTrip.id} state={state} nav={nav} setState={setState} />
+      case 'past-itinerary': return state.viewedPastTrip ? <ItineraryScreen key={'past-' + state.viewedPastTrip.id} state={state} nav={nav} setState={setState} pastTrip={state.viewedPastTrip} /> : <PastTripsScreen state={state} nav={nav} setState={setState} />
       case 'accommodation': return <AccommodationScreen state={state} nav={nav} />
       case 'pre-departure': return <PreDepartureScreen state={state} nav={nav} />
       case 'today-travel': return <TodayTravelScreen state={state} nav={nav} setState={setState} />
