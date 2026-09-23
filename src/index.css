@@ -62,47 +62,9 @@ body {
   font-size: 110%;
 }
 
-/* 오늘의 여행 지도 위에 표시되는 날씨 효과: 지도 조작을 막지 않도록 장식 전용으로 둔다. */
-.weather-map-overlay {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 650;
-  overflow: hidden;
-}
-
-.weather-rain-drop {
-  position: absolute;
-  top: -18%;
-  width: 2px;
-  height: 26px;
-  border-radius: 999px;
-  background: linear-gradient(to bottom, rgba(233, 246, 255, 0.12), rgba(117, 181, 239, 0.92));
-  box-shadow: 0 0 2px rgba(232, 246, 255, 0.6);
-  transform: rotate(7deg);
-  animation: weather-rain-fall 1.15s linear infinite;
-}
-
-.weather-rain-drop:nth-child(3n) {
-  width: 1px;
-  height: 18px;
-  opacity: 0.68;
-}
-
-.weather-rain-drop:nth-child(4n) {
-  width: 3px;
-  height: 32px;
-  opacity: 0.82;
-}
-
-.weather-rain-mist {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 34%;
-  background: linear-gradient(to top, rgba(86, 142, 202, 0.16), transparent);
-  animation: weather-rain-mist 2.8s ease-in-out infinite;
+/* 비 오는 계획에서는 오늘의 여행 제목부터 일정 목록 바탕까지 정적인 흐린 날 배경을 이어준다. */
+.weather-rain-gradient {
+  background: linear-gradient(180deg, #cbd5e1 0%, #e2e8f0 48%, #f1f5f9 100%);
 }
 
 .weather-sun-glow {
@@ -116,55 +78,14 @@ body {
   animation: weather-sun-breathe 3.6s ease-in-out infinite;
 }
 
-@keyframes weather-rain-fall {
-  from { transform: translate3d(0, -14px, 0) rotate(7deg); opacity: 0; }
-  16% { opacity: 0.86; }
-  82% { opacity: 0.74; }
-  to { transform: translate3d(-6px, 258px, 0) rotate(7deg); opacity: 0; }
-}
-
-@keyframes weather-rain-mist {
-  0%, 100% { opacity: 0.48; }
-  50% { opacity: 0.72; }
-}
-
 @keyframes weather-sun-breathe {
   0%, 100% { transform: scale(0.92); opacity: 0.5; }
   50% { transform: scale(1.08); opacity: 0.85; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .weather-map-overlay { opacity: 0.7; }
-  .weather-rain-drop,
   .weather-sun-glow { animation: none; }
 }
-/* 비 오는 날에는 지도뿐 아니라 일정 카드 영역까지 빗줄기가 이어진다. */
-.weather-travel-rain {
-  pointer-events: none;
-  position: absolute;
-  top: 258px;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  overflow: hidden;
-}
-
-.weather-travel-rain .weather-rain-drop {
-  animation-name: weather-travel-rain-fall;
-}
-
-.weather-travel-rain .weather-rain-mist {
-  height: 42%;
-}
-
-@keyframes weather-travel-rain-fall {
-  from { transform: translate3d(0, -18px, 0) rotate(7deg); opacity: 0; }
-  14% { opacity: 0.86; }
-  86% { opacity: 0.7; }
-  to { transform: translate3d(-12px, 780px, 0) rotate(7deg); opacity: 0; }
-}
-
 
 /* 더운 날에는 일정 카드 뒤로 은은한 햇살과 따뜻한 반사광을 보여준다. */
 .weather-travel-sun {
