@@ -698,13 +698,18 @@ function YouTubeSavedScreen({ state, nav, setState }: { state: AppState; nav: (s
         </div>
         <p className="text-sm text-gray-400">YouTube에서 발견하고 저장한 여행지예요</p>
       </div>
-      <div className="px-5 mb-3 flex-shrink-0">
-        <button onClick={() => nav('ai-analysis')} className="w-full h-11 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm text-[#4169D8]"
+      <div className="mb-4 grid flex-shrink-0 grid-cols-2 gap-3 px-5">
+        <button onClick={() => nav('ai-analysis')} className="flex h-32 flex-col items-center justify-center gap-2 rounded-3xl p-3 text-center font-bold text-[#4169D8] active:scale-[0.98] transition-transform focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#4169D8]"
           style={{ background: 'linear-gradient(135deg,#EEF2FF,#F0F4FF)', border: '1.5px solid #C7D4F8' }}>
-          <YtIc /> AI로 내 여행 취향 분석하기
+          <span aria-hidden="true" className="[&>svg]:size-8"><YtIc /></span>
+          <span className={sm ? 'text-base leading-6' : 'text-sm leading-5'}>AI로 내 여행<br />취향 분석하기</span>
+        </button>
+        <button onClick={() => nav('past-trips')} className="flex h-32 flex-col items-center justify-center gap-2 rounded-3xl bg-white p-3 text-center font-bold text-[#8B5E3C] shadow-sm active:scale-[0.98] transition-transform focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#8B5E3C]">
+          <span aria-hidden="true" className="text-3xl">📷</span>
+          <span className={sm ? 'text-base leading-6' : 'text-sm leading-5'}>지난 여행 보기</span>
         </button>
       </div>
-            <div className="px-5 mb-3 flex-shrink-0"><button onClick={() => nav('past-trips')} className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-bold text-[#8B5E3C] shadow-sm">📷 지난 여행 보기</button></div><div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
         <div className="grid grid-cols-2 gap-3">
           {state.savedPlaces.map(p => (
             <button key={p.id} onClick={() => { setState(s => ({ ...s, selectedPlace: p })); nav('place-detail') }}
